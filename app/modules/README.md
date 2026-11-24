@@ -23,7 +23,11 @@ Start a new module by copying `example/`.
 
 **Tests go through the entry points too.** Files in `<module>/tests/` may import any module's entry points and their own `tests/` fixtures, but never any module's internals, not even their own. Integration tests across modules are fine; deep imports are not.
 
+**Tests live in `tests/`.** A `*.test.*` file anywhere else in `app/` fails the check: outside `tests/` it would count as the module's own code and could reach internals unchecked.
+
 **No cycles.** No dependency cycles anywhere.
+
+Type-only imports (`import type`) are checked too. [CODING_STANDARDS.md](../../CODING_STANDARDS.md) covers the routes past these rules that the linter can't see.
 
 ## No barrel files
 

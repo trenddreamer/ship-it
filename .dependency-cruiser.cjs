@@ -72,6 +72,14 @@ module.exports = {
       from: {},
       to: { circular: true },
     },
+    {
+      name: "tests-live-in-tests-folder",
+      comment:
+        "Test files live only in <package>/tests/. Anywhere else, a test counts as the package's own code and could import internals unchecked.",
+      severity: "error",
+      from: { path: "\\.test\\.[cm]?[jt]sx?$", pathNot: `^${R}/[^/]+/tests/` },
+      to: {},
+    },
 
     // --- Layering (optional, off by default) ----------------------------------
     // Interface-hiding controls HOW you import (through the entry points).
@@ -87,6 +95,9 @@ module.exports = {
   ],
   options: {
     doNotFollow: { path: "node_modules" },
+    // Also check type-only imports (`import type`), which TypeScript erases
+    // and dependency-cruiser would otherwise ignore.
+    tsPreCompilationDeps: true,
     tsConfig: { fileName: "tsconfig.json" },
     enhancedResolveOptions: {
       extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],

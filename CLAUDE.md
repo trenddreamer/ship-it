@@ -1,6 +1,6 @@
 # ship-it
 
-Modules are deep modules: see [app/modules/README.md](./app/modules/README.md) before adding or importing one. Run `npm run check` (typecheck, boundaries, tests) before committing.
+Modules are deep modules: see [app/modules/README.md](./app/modules/README.md) before adding or importing one, and follow [CODING_STANDARDS.md](./CODING_STANDARDS.md). Run `npm run check` (typecheck, boundaries, tests) before committing.
 
 ## Agent skills
 
