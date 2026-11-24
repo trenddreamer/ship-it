@@ -1,8 +1,8 @@
 // Entry point: what Customers see of Vendors and their Products.
-import { findApprovedVendors, type ShownProduct, type ShownVendor } from "./lib/approved-vendors";
+import { findApprovedVendors, type ShownVendor } from "./lib/approved-vendors";
 import type { MarketplaceDatabase } from "./lib/database";
 
-export type { MarketplaceDatabase, ShownProduct, ShownVendor };
+export type { MarketplaceDatabase };
 
 /**
  * The Vendors a Customer may see: every approved Vendor, each with its
