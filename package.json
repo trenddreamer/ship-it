@@ -9,10 +9,12 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint:boundaries": "depcruise app",
-    "check": "npm run typecheck && npm run lint:boundaries && npm run test"
+    "check": "npm run typecheck && npm run lint:boundaries && npm run test",
+    "prepare": "husky"
   },
   "devDependencies": {
     "dependency-cruiser": "^18.9.0",
+    "husky": "^9.1.7",
     "typescript": "^6.0.3",
     "vitest": "^5.1.1"
   }

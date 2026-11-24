@@ -66,3 +66,13 @@ _Judgement call._ An entry point should hide real behaviour. A module whose entr
 ### Modules are flat
 
 Every folder directly under `app/modules/` is a module. Don't nest a module inside another. Shared code that several modules need becomes its own module with its own entry points, not a shared folder that others reach into.
+
+## Files
+
+### Files stay under 5,000 tokens
+
+The pre-commit hook (`scripts/check-file-tokens.sh`) rejects any staged file over about 5,000 tokens (bytes / 4) and explains how to split it. Binaries and the paths in `scripts/token-limit-exempt.txt` are exempt: workflows, migrations, lockfiles, vendored skills and generated files. Reviewers check for ways around it that the hook can't see: a file shrunk by minifying, packing lines together or deleting comments and docs, instead of being split along its responsibilities; a file moved to an exempt path to dodge the limit; or a new line in the exempt list without a human's sign-off. Only files nobody splits by hand belong on that list.
+
+### The pre-commit hook stays under 3 seconds
+
+`scripts/pre-commit.sh` runs only fast checks on staged files. Typecheck, tests, the boundary lint, or anything else that grows with the codebase runs in `npm run check` and CI, never in the hook.
