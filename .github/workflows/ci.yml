@@ -1,0 +1,60 @@
+name: CI
+
+# The gate every change goes through: typecheck, module boundaries, tests,
+# a fresh database and a production build.
+#
+# WHY IT EXISTS
+#   The pre-commit hook is kept under 3 seconds, so it checks only file
+#   sizes. Everything that grows with the codebase runs here instead, on
+#   every pull request, whoever opened it. The factory pushes with
+#   FACTORY_PAT, not GITHUB_TOKEN, so its pull requests and the reviewer's
+#   fix-up commits trigger this too.
+#
+# MAKE IT REQUIRED
+#   Settings → Branches → a rule for `main` → "Require status checks to
+#   pass" → add `check`. Until then a red run warns but doesn't block a
+#   merge.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Migrate and seed a fresh database
+        # Proves every migration applies from scratch and the seed runs,
+        # exactly as the agent workflows do before each run.
+        run: |
+          npm run db:migrate
+          npm run db:seed
+
+      - name: Typecheck, module boundaries and tests
+        run: npm run check
+
+      - name: Build
+        run: npm run build
