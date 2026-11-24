@@ -1,0 +1,19 @@
+{
+  "name": "ship-it",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint:boundaries": "depcruise app",
+    "check": "npm run typecheck && npm run lint:boundaries && npm run test"
+  },
+  "devDependencies": {
+    "dependency-cruiser": "^18.9.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.1.1"
+  }
+}
