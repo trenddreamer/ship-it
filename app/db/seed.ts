@@ -10,8 +10,14 @@ interface SeedVendor {
   name: string;
   description: string;
   approvalStatus: VendorApprovalStatus;
-  /** [name, description, Price in whole cents] */
-  products: [string, string, number][];
+  products: SeedProduct[];
+}
+
+interface SeedProduct {
+  name: string;
+  description: string;
+  /** Price per Delivery, in whole cents. */
+  priceCents: number;
 }
 
 const seedVendors: SeedVendor[] = [
@@ -20,9 +26,21 @@ const seedVendors: SeedVendor[] = [
     description: "Pasture-raised eggs and meat from a family farm outside Graaff-Reinet.",
     approvalStatus: "approved",
     products: [
-      ["Free-range eggs (30)", "A tray of 30 large free-range eggs, collected the day before.", 15000],
-      ["Karoo lamb box", "2 kg of mixed lamb cuts: chops, shoulder and mince.", 52500],
-      ["Beef boerewors", "1 kg of traditional coiled boerewors, made in small batches.", 18900],
+      {
+        name: "Free-range eggs (30)",
+        description: "A tray of 30 large free-range eggs, collected the day before.",
+        priceCents: 15000,
+      },
+      {
+        name: "Karoo lamb box",
+        description: "2 kg of mixed lamb cuts: chops, shoulder and mince.",
+        priceCents: 52500,
+      },
+      {
+        name: "Beef boerewors",
+        description: "1 kg of traditional coiled boerewors, made in small batches.",
+        priceCents: 18900,
+      },
     ],
   },
   {
@@ -30,8 +48,16 @@ const seedVendors: SeedVendor[] = [
     description: "Speciality coffee roasted weekly in Woodstock.",
     approvalStatus: "approved",
     products: [
-      ["House espresso blend (500 g)", "Chocolatey Brazilian and Ethiopian blend, whole bean.", 21000],
-      ["Single-origin filter (250 g)", "A rotating single origin, roasted light for pour-over.", 14500],
+      {
+        name: "House espresso blend (500 g)",
+        description: "Chocolatey Brazilian and Ethiopian blend, whole bean.",
+        priceCents: 21000,
+      },
+      {
+        name: "Single-origin filter (250 g)",
+        description: "A rotating single origin, roasted light for pour-over.",
+        priceCents: 14500,
+      },
     ],
   },
   {
@@ -44,13 +70,21 @@ const seedVendors: SeedVendor[] = [
     name: "Joburg Craft Bakery",
     description: "Sourdough and pastries from Maboneng, baked overnight.",
     approvalStatus: "pending",
-    products: [["Sourdough loaf", "A 900 g country sourdough.", 6500]],
+    products: [
+      { name: "Sourdough loaf", description: "A 900 g country sourdough.", priceCents: 6500 },
+    ],
   },
   {
     name: "Garden Route Honey",
     description: "Raw fynbos honey from hives near Knysna.",
     approvalStatus: "rejected",
-    products: [["Fynbos honey (500 g)", "Raw, unfiltered fynbos honey.", 12000]],
+    products: [
+      {
+        name: "Fynbos honey (500 g)",
+        description: "Raw, unfiltered fynbos honey.",
+        priceCents: 12000,
+      },
+    ],
   },
 ];
 
@@ -68,8 +102,10 @@ export function seed(database: DB): void {
         })
         .returning({ id: vendors.id })
         .get();
-      for (const [name, description, priceCents] of vendor.products) {
-        tx.insert(products).values({ vendorId: id, name, description, priceCents }).run();
+      for (const product of vendor.products) {
+        tx.insert(products)
+          .values({ vendorId: id, ...product })
+          .run();
       }
     }
   });
