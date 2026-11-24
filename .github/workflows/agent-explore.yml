@@ -162,6 +162,13 @@ jobs:
         if: steps.batch.outputs.numbers != '[]'
         run: npm install -g @anthropic-ai/claude-code
 
+      - name: Install Matt Pocock's skills
+        if: steps.batch.outputs.numbers != '[]'
+        # Not pinned on purpose: CI follows the latest plugin, like a local install.
+        run: |
+          claude plugin marketplace add anthropics/claude-plugins-official
+          claude plugin install mattpocock-skills@claude-plugins-official
+
       - name: Explore
         if: steps.batch.outputs.numbers != '[]'
         env:

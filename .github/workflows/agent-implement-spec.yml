@@ -289,6 +289,12 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
 
+      - name: Install Matt Pocock's skills
+        # Not pinned on purpose: CI follows the latest plugin, like a local install.
+        run: |
+          claude plugin marketplace add anthropics/claude-plugins-official
+          claude plugin install mattpocock-skills@claude-plugins-official
+
       - name: Decompose the spec into a queue
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -394,6 +400,12 @@ jobs:
 
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
+
+      - name: Install Matt Pocock's skills
+        # Not pinned on purpose: CI follows the latest plugin, like a local install.
+        run: |
+          claude plugin marketplace add anthropics/claude-plugins-official
+          claude plugin install mattpocock-skills@claude-plugins-official
 
       - name: Migrate and seed the database
         run: |

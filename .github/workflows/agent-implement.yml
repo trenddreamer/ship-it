@@ -132,6 +132,12 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
 
+      - name: Install Matt Pocock's skills
+        # Not pinned on purpose: CI follows the latest plugin, like a local install.
+        run: |
+          claude plugin marketplace add anthropics/claude-plugins-official
+          claude plugin install mattpocock-skills@claude-plugins-official
+
       - name: Migrate and seed the database
         # The agent gets a real database, because half of this repo's checks
         # need one. It is disposable: a fresh one, migrated and seeded, on
