@@ -33,7 +33,7 @@ export default function AdminPage({ loaderData, actionData }: Route.ComponentPro
   return (
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-semibold">Admin</h1>
-      <p className="mt-2 text-gray-600">Signed in as {email}.</p>
+      <p className="mt-2 text-muted">Signed in as {email}.</p>
 
       <section aria-labelledby="pending-heading" className="mt-8">
         <h2 id="pending-heading" className="text-xl font-semibold">
@@ -41,13 +41,13 @@ export default function AdminPage({ loaderData, actionData }: Route.ComponentPro
         </h2>
         <FormError message={actionData?.error} />
         {pending.length === 0 ? (
-          <p className="mt-4 italic text-gray-500">No Vendors are awaiting approval.</p>
+          <p className="mt-4 italic text-muted">No Vendors are awaiting approval.</p>
         ) : (
           <ul className="mt-4 space-y-4">
             {pending.map((vendor) => (
-              <li key={vendor.id} className="rounded-lg border border-gray-200 p-4">
+              <li key={vendor.id} className="rounded-lg border border-line p-4">
                 <h3 className="font-semibold">{vendor.name}</h3>
-                {vendor.description && <p className="mt-1 text-gray-600">{vendor.description}</p>}
+                {vendor.description && <p className="mt-1 text-muted">{vendor.description}</p>}
                 <Form method="post" className="mt-3 flex gap-2">
                   <input type="hidden" name="vendorId" value={vendor.id} />
                   <button
@@ -55,7 +55,7 @@ export default function AdminPage({ loaderData, actionData }: Route.ComponentPro
                     name="decision"
                     value="approved"
                     aria-label={`Approve ${vendor.name}`}
-                    className="rounded bg-gray-900 px-4 py-2 text-white"
+                    className="rounded bg-primary px-4 py-2 text-on-primary"
                   >
                     Approve
                   </button>
@@ -64,7 +64,7 @@ export default function AdminPage({ loaderData, actionData }: Route.ComponentPro
                     name="decision"
                     value="rejected"
                     aria-label={`Reject ${vendor.name}`}
-                    className="rounded border border-gray-300 px-4 py-2"
+                    className="rounded border border-line-strong px-4 py-2"
                   >
                     Reject
                   </button>

@@ -92,15 +92,15 @@ export default function VendorPage({ loaderData, actionData }: Route.ComponentPr
     return (
       <main className="mx-auto max-w-3xl p-8">
         <h1 className="text-3xl font-semibold">{vendor.name}</h1>
-        <p className="mt-6 rounded border border-gray-200 p-4">{approvalMessages.rejected}</p>
+        <p className="mt-6 rounded border border-line p-4">{approvalMessages.rejected}</p>
       </main>
     );
   }
   return (
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-semibold">{vendor.name}</h1>
-      <p className="mt-2 text-gray-600">{vendor.description}</p>
-      <p className="mt-6 rounded border border-gray-200 p-4">
+      <p className="mt-2 text-muted">{vendor.description}</p>
+      <p className="mt-6 rounded border border-line p-4">
         {approvalMessages[vendor.approvalStatus]}
       </p>
 
@@ -109,19 +109,19 @@ export default function VendorPage({ loaderData, actionData }: Route.ComponentPr
           <h2 id="products-heading" className="text-xl font-semibold">
             Your Products
           </h2>
-          <Link to="/vendor/products/new" className="rounded bg-gray-900 px-4 py-2 text-white">
+          <Link to="/vendor/products/new" className="rounded bg-primary px-4 py-2 text-on-primary">
             Add a Product
           </Link>
         </div>
         {products.length === 0 ? (
-          <p className="mt-4 italic text-gray-500">No products yet</p>
+          <p className="mt-4 italic text-muted">No products yet</p>
         ) : (
-          <ul className="mt-4 divide-y divide-gray-100">
+          <ul className="mt-4 divide-y divide-line">
             {products.map((product) => (
               <li key={product.id} className="flex justify-between gap-6 py-3">
                 <div>
                   <h3 className="font-medium">{product.name}</h3>
-                  <p className="text-sm text-gray-600">{product.description}</p>
+                  <p className="text-sm text-muted">{product.description}</p>
                   <p className="mt-1 text-sm">
                     Delivered:{" "}
                     {product.deliverySchedules.map((s) => deliveryScheduleLabel(s)).join(", ")}
@@ -132,7 +132,7 @@ export default function VendorPage({ loaderData, actionData }: Route.ComponentPr
                 </div>
                 <p className="shrink-0 text-right">
                   <span className="font-semibold">{product.price}</span>
-                  <span className="block text-xs text-gray-500">per Delivery</span>
+                  <span className="block text-xs text-muted">per Delivery</span>
                   <Link
                     to={`/vendor/products/${product.id}/price`}
                     aria-label={`Change the Price of ${product.name}`}

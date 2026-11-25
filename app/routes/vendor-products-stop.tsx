@@ -45,14 +45,14 @@ export default function StopSelling({ loaderData }: Route.ComponentProps) {
   return (
     <main className="mx-auto max-w-md p-8">
       <h1 className="text-3xl font-semibold">{what}</h1>
-      <p role="alert" className="mt-6 rounded border border-amber-300 bg-amber-50 p-4">
+      <p role="alert" className="mt-6 rounded border border-warning-line bg-warning-soft p-4">
         This will cancel {activeSubscriptions} active Subscription
         {activeSubscriptions === 1 ? "" : "s"}, and tell each Customer why. Deliveries already due
         still stand. You can't undo it: to sell it again, add it again.
       </p>
       <Form method="post" className="mt-6 flex items-center gap-4">
         <input type="hidden" name="schedule" value={deliverySchedule ?? ""} />
-        <button type="submit" className="rounded bg-red-700 px-4 py-2 text-white">
+        <button type="submit" className="rounded bg-danger-solid px-4 py-2 text-on-danger">
           {scheduleLabel ? `Stop delivering ${scheduleLabel.toLowerCase()}` : "Stop selling"}
         </button>
         <Link to="/vendor" className="underline">

@@ -35,7 +35,7 @@ export default function SignUpVendor({ actionData }: Route.ComponentProps) {
   return (
     <main className="mx-auto max-w-md p-8">
       <h1 className="text-3xl font-semibold">Sign up as a Vendor</h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-muted">
         An Admin approves each new Vendor before Customers can see its Products. Buying instead?{" "}
         <Link to="/sign-up">Sign up as a Customer</Link>.
       </p>
@@ -61,7 +61,7 @@ export default function SignUpVendor({ actionData }: Route.ComponentProps) {
           errors={errors.businessName}
         />
         <TextField label="Description" name="description" multiline errors={errors.description} />
-        <button type="submit" className="rounded bg-gray-900 px-4 py-2 text-white">
+        <button type="submit" className="rounded bg-primary px-4 py-2 text-on-primary">
           Sign up
         </button>
       </Form>

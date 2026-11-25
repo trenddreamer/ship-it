@@ -41,7 +41,7 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
   const unread = account && !inInbox ? account.unread : 0;
   return (
     <>
-      <header className="border-b border-gray-200">
+      <header className="border-b border-line">
         <nav className="mx-auto flex max-w-3xl items-center gap-4 px-8 py-3">
           <Link to="/" className="font-semibold">
             Marketplace
@@ -106,14 +106,14 @@ function Feedback() {
       <button
         type="button"
         onClick={open}
-        className="fixed bottom-4 right-4 rounded-full bg-gray-900 px-4 py-2 text-white shadow-lg"
+        className="fixed bottom-4 right-4 rounded-full bg-primary px-4 py-2 text-on-primary shadow-lg"
       >
         Feedback
       </button>
       <dialog
         ref={dialog}
         aria-labelledby="feedback-heading"
-        className="fixed inset-auto bottom-16 right-4 m-0 w-[min(24rem,calc(100vw-2rem))] rounded-lg border border-gray-200 p-4 shadow-xl backdrop:bg-black/20"
+        className="fixed inset-auto bottom-16 right-4 m-0 w-[min(24rem,calc(100vw-2rem))] rounded-lg border border-line p-4 shadow-xl backdrop:bg-black/20"
       >
         <div className="flex items-center">
           <h2 id="feedback-heading" className="flex-1 font-semibold">
@@ -145,30 +145,30 @@ function Feedback() {
           >
             <input type="hidden" name="page" value={pathname} />
             <label className="block">
-              <span className="text-gray-600">What's wrong, or what could be better?</span>
+              <span className="text-muted">What's wrong, or what could be better?</span>
               <textarea
                 name="text"
                 required
                 minLength={feedbackTextLength.min}
                 maxLength={feedbackTextLength.max}
                 rows={5}
-                className="mt-1 block w-full rounded border border-gray-300 p-2"
+                className="mt-1 block w-full rounded border border-line-strong p-2"
               />
             </label>
             {result?.kind === "invalid" && (
-              <p role="alert" className="text-red-700">
+              <p role="alert" className="text-danger">
                 {result.reason}
               </p>
             )}
             {result?.kind === "failed" && (
-              <p role="alert" className="text-red-700">
+              <p role="alert" className="text-danger">
                 Couldn't send your feedback. Try again in a moment.
               </p>
             )}
             <button
               type="submit"
               disabled={fetcher.state !== "idle"}
-              className="rounded bg-gray-900 px-4 py-2 text-white"
+              className="rounded bg-primary px-4 py-2 text-on-primary"
             >
               {fetcher.state === "idle" ? "Send Feedback" : "Sending…"}
             </button>

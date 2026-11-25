@@ -18,7 +18,7 @@ export function ProductSubscriptions({ subscriptions }: { subscriptions: ShownSu
           : `${count} active Subscription${count === 1 ? "" : "s"}`}
       </p>
       {count > 0 && (
-        <ul className="mt-1 list-disc pl-5 text-gray-700">
+        <ul className="mt-1 list-disc pl-5 text-muted">
           {subscriptions.map((subscription) => (
             <li key={subscription.id}>
               {subscription.customerEmail}: {subscription.schedule}, next Delivery due{" "}

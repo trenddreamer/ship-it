@@ -27,7 +27,7 @@ export default function Charges({ loaderData }: Route.ComponentProps) {
   return (
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-semibold">Your Charges</h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-muted">
         You're charged for each Delivery when its Vendor ships it, newest first.
       </p>
       <ChargeList charges={loaderData.charges} empty="No Charges yet." />

@@ -19,7 +19,7 @@ export function StopLinks({
       <Link
         to={stopPage}
         aria-label={`Stop selling ${product.name}`}
-        className="text-red-700 underline"
+        className="text-danger underline"
       >
         Stop selling
       </Link>
@@ -31,7 +31,7 @@ export function StopLinks({
               key={schedule}
               to={`${stopPage}?schedule=${schedule}`}
               aria-label={`Stop delivering ${product.name} ${label}`}
-              className="text-red-700 underline"
+              className="text-danger underline"
             >
               Stop delivering {label}
             </Link>

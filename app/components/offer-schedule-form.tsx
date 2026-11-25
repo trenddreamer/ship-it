@@ -24,7 +24,7 @@ export function OfferScheduleForm({
       <select
         name="schedule"
         aria-label={`Delivery Schedule to offer for ${product.name}`}
-        className="rounded border border-gray-300 px-2 py-1"
+        className="rounded border border-line-strong px-2 py-1"
       >
         {missing.map((option) => (
           <option key={option.value} value={option.value}>

@@ -46,7 +46,7 @@ export default function DeliveryAddressPage({ loaderData, actionData }: Route.Co
   return (
     <main className="mx-auto max-w-md p-8">
       <h1 className="text-3xl font-semibold">Your Delivery Address</h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-muted">
         {subscribing && !address ? "Before you subscribe, tell us where to deliver. " : ""}
         All your Subscriptions are delivered here.
       </p>
@@ -79,7 +79,7 @@ export default function DeliveryAddressPage({ loaderData, actionData }: Route.Co
           defaultValue={address?.postalCode}
           errors={errors.postalCode}
         />
-        <button type="submit" className="rounded bg-gray-900 px-4 py-2 text-white">
+        <button type="submit" className="rounded bg-primary px-4 py-2 text-on-primary">
           Save Delivery Address
         </button>
       </Form>

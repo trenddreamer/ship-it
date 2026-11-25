@@ -28,7 +28,7 @@ export function TextField({
     defaultValue,
     "aria-invalid": errors?.length ? true : undefined,
     "aria-describedby": errors?.length ? errorId : undefined,
-    className: "mt-1 block w-full rounded border border-gray-300 px-3 py-2",
+    className: "mt-1 block w-full rounded border border-line-strong px-3 py-2",
   };
   return (
     <div>
@@ -41,7 +41,7 @@ export function TextField({
         <input type={type} autoComplete={autoComplete} {...shared} />
       )}
       {errors?.length ? (
-        <p id={errorId} className="mt-1 text-sm text-red-700">
+        <p id={errorId} className="mt-1 text-sm text-danger">
           {errors.join(" ")}
         </p>
       ) : null}
@@ -53,7 +53,7 @@ export function TextField({
 export function FormError({ message }: { message?: string }) {
   if (!message) return null;
   return (
-    <p role="alert" className="rounded bg-red-50 p-3 text-red-800">
+    <p role="alert" className="rounded bg-danger-soft p-3 text-danger">
       {message}
     </p>
   );

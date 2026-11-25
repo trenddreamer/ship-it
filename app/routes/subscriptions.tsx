@@ -65,7 +65,7 @@ export default function Subscriptions({ loaderData, actionData }: Route.Componen
   return (
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-semibold">Your Subscriptions</h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-muted">
         {address ? `Delivered to ${address}. ` : "You haven't set a Delivery Address yet. "}
         <Link to="/delivery-address" className="underline">
           {address ? "Change your Delivery Address" : "Set your Delivery Address"}
@@ -75,17 +75,17 @@ export default function Subscriptions({ loaderData, actionData }: Route.Componen
         <FormError message={actionData?.formError} />
       </div>
       {subscriptions.length === 0 ? (
-        <p className="mt-8 text-gray-600">
+        <p className="mt-8 text-muted">
           No Subscriptions yet. <Link to="/">Find a Product</Link> to subscribe to.
         </p>
       ) : (
-        <ul className="mt-4 divide-y divide-gray-100">
+        <ul className="mt-4 divide-y divide-line">
           {subscriptions.map((subscription) => (
             <li key={subscription.id} className="py-3">
               <div className="flex justify-between gap-6">
                 <div>
                   <h2 className="font-medium">{subscription.productName}</h2>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted">
                     From {subscription.vendorName}, delivered {subscription.schedule}
                   </p>
                   <p className="mt-1 text-sm">
@@ -96,7 +96,7 @@ export default function Subscriptions({ loaderData, actionData }: Route.Componen
                 </div>
                 <p className="shrink-0 text-right">
                   <span className="font-semibold">{subscription.price}</span>
-                  <span className="block text-xs text-gray-500">per Delivery</span>
+                  <span className="block text-xs text-muted">per Delivery</span>
                 </p>
               </div>
               {subscription.cancelled ? null : (
@@ -109,7 +109,7 @@ export default function Subscriptions({ loaderData, actionData }: Route.Componen
                         Switch to{" "}
                         <select
                           name="deliverySchedule"
-                          className="rounded border border-gray-300 px-2 py-1"
+                          className="rounded border border-line-strong px-2 py-1"
                         >
                           {subscription.switchTo.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -118,7 +118,7 @@ export default function Subscriptions({ loaderData, actionData }: Route.Componen
                           ))}
                         </select>
                       </label>
-                      <button type="submit" className="rounded border border-gray-300 px-3 py-1">
+                      <button type="submit" className="rounded border border-line-strong px-3 py-1">
                         Switch schedule
                       </button>
                     </Form>
@@ -126,7 +126,7 @@ export default function Subscriptions({ loaderData, actionData }: Route.Componen
                   <Form method="post">
                     <input type="hidden" name="intent" value="cancel" />
                     <input type="hidden" name="subscriptionId" value={subscription.id} />
-                    <button type="submit" className="rounded border border-red-300 px-3 py-1">
+                    <button type="submit" className="rounded border border-danger-line px-3 py-1">
                       Cancel Subscription
                     </button>
                   </Form>

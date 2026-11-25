@@ -36,16 +36,16 @@ export default function InboxPage({ loaderData }: Route.ComponentProps) {
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-semibold">Inbox</h1>
       {notifications.length === 0 ? (
-        <p className="mt-6 text-gray-600">No Notifications yet.</p>
+        <p className="mt-6 text-muted">No Notifications yet.</p>
       ) : (
-        <ul className="mt-6 divide-y divide-gray-200 border-y border-gray-200">
+        <ul className="mt-6 divide-y divide-line border-y border-line">
           {notifications.map((notification) => (
             <li key={notification.id} className="flex items-baseline gap-4 py-3">
               <span className={notification.unread ? "flex-1 font-semibold" : "flex-1"}>
                 {notification.message}
               </span>
-              {notification.unread && <span className="text-sm text-blue-700">New</span>}
-              <time dateTime={notification.sentAt} className="text-sm text-gray-500">
+              {notification.unread && <span className="text-sm text-accent">New</span>}
+              <time dateTime={notification.sentAt} className="text-sm text-muted">
                 {notification.sentAtText}
               </time>
             </li>
