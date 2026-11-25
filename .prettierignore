@@ -6,3 +6,5 @@ app/db/migrations/
 package-lock.json
 skills-lock.json
 .claude/skills/
+# Agents' git worktrees: each is a whole other checkout.
+.claude/worktrees/

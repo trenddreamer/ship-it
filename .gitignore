@@ -7,3 +7,5 @@ node_modules/
 /.stryker-tmp/
 /test-results/
 /playwright-report/
+# Agents' git worktrees (Claude Code's isolated checkouts).
+/.claude/worktrees/

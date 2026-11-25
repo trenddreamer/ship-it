@@ -32,5 +32,8 @@ export default {
   // of being killed, which inflates the score.
   concurrency: 4,
   tempDirName: ".stryker-tmp",
+  // Stryker copies the project into each sandbox and doesn't read .gitignore,
+  // so skip agents' git worktrees, each a whole checkout with node_modules.
+  ignorePatterns: ["/.claude/worktrees"],
   cleanTempDir: true,
 };

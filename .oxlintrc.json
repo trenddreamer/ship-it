@@ -22,5 +22,11 @@
     ],
     "vitest/require-to-throw-message": "off"
   },
-  "ignorePatterns": ["build/**", ".react-router/**", "data/**", "app/db/migrations/**"]
+  "ignorePatterns": [
+    "build/**",
+    ".react-router/**",
+    "data/**",
+    "app/db/migrations/**",
+    ".claude/worktrees/**"
+  ]
 }
