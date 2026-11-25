@@ -5,85 +5,20 @@
 // steps share the one database the run started with, so a later step sees
 // what an earlier one did. Never import from `app/`: the journey sees only
 // what a person sees. Run it with `npm run test:journey` (see e2e/run.ts).
-import { expect, test, type Page } from "@playwright/test";
-
-/** The card of a Vendor on the home page. */
-function vendorCard(page: Page, name: string) {
-  return page.getByRole("listitem").filter({
-    has: page.getByRole("heading", { level: 2, name, exact: true }),
-  });
-}
-
-/**
- * The seeded demo Accounts (app/db/seed.ts). The Admin is the configured
- * first Admin, with the local defaults from app/config.server.ts.
- */
-const demo = {
-  admin: { email: "admin@ship-it.test", password: "admin-password" },
-  customer: { email: "customer@ship-it.test", password: "customer-password" },
-  // Pending in the seed; the Admin rejects it in the journey.
-  rejectedVendor: { email: "bakery@ship-it.test", password: "vendor-password" },
-};
-
-/** The Vendor who signs up in the journey: pending, until the Admin approves it. */
-const rooibosVendor = { email: "lindiwe@rooibos.test", password: "rooibos-password" };
-
-/** The Customer who signs up in the journey, and where they live. */
-const newCustomer = { email: "naledi@example.test", password: "naledi-password" };
-const address = {
-  street: "12 Long Street",
-  suburb: "Gardens",
-  city: "Cape Town",
-  postalCode: "8001",
-};
-
-/** Fills in and saves the Delivery Address form. */
-async function fillAddress(page: Page, value: typeof address) {
-  await page.getByLabel("Street address").fill(value.street);
-  await page.getByLabel("Suburb").fill(value.suburb);
-  await page.getByLabel("City or town").fill(value.city);
-  await page.getByLabel("Postal code").fill(value.postalCode);
-  await page.getByRole("button", { name: "Save Delivery Address" }).click();
-}
-
-/** Tomorrow's date in Johannesburg (no daylight saving there), as the app shows dates. */
-function johannesburgTomorrow() {
-  return new Intl.DateTimeFormat("en-ZA", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "Africa/Johannesburg",
-  }).format(new Date(Date.now() + 24 * 60 * 60 * 1000));
-}
-
-/** Adds a Product from the Vendor page through the new-Product form. */
-async function addProduct(
-  page: Page,
-  product: { name: string; description: string; price: string; schedules: string[] },
-) {
-  await page.getByRole("link", { name: "Add a Product" }).click();
-  await page.getByLabel("Name").fill(product.name);
-  await page.getByLabel("Description").fill(product.description);
-  await page.getByLabel("Price per Delivery (R)").fill(product.price);
-  for (const schedule of product.schedules) {
-    await page.getByRole("checkbox", { name: schedule }).check();
-  }
-  await page.getByRole("button", { name: "Add Product" }).click();
-}
-
-/** Signs in through the sign-in page. Waits for the sign-in page to be left. */
-async function signIn(page: Page, account: { email: string; password: string }) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(account.email);
-  await page.getByLabel("Password").fill(account.password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page).not.toHaveURL(/\/sign-in$/);
-}
-
-async function signOut(page: Page) {
-  await page.getByRole("button", { name: "Sign out" }).click();
-  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
-}
+import { expect, test } from "@playwright/test";
+import {
+  addProduct,
+  address,
+  demo,
+  fillAddress,
+  johannesburgDay,
+  johannesburgTomorrow,
+  newCustomer,
+  rooibosVendor,
+  signIn,
+  signOut,
+  vendorCard,
+} from "./helpers";
 
 test.describe.serial("Marketplace journey", () => {
   test("a visitor sees the approved Vendors, their Products and Prices on the home page", async ({
@@ -395,5 +330,53 @@ test.describe.serial("Marketplace journey", () => {
     const chai = page.getByRole("listitem").filter({ hasText: "Rooibos chai (100 g)" });
     await expect(chai).toContainText("1 active Subscription");
     await expect(chai).toContainText(newCustomer.email);
+  });
+
+  test("the seeded Customer switches one Subscription's schedule and cancels another", async ({
+    page,
+  }) => {
+    await signIn(page, demo.customer);
+    await page.goto("/subscriptions");
+
+    // Eggs: Weekly, switched to Every two weeks, next due the day after the switch.
+    const eggs = page.getByRole("listitem").filter({ hasText: "Free-range eggs (30)" });
+    await expect(eggs.getByRole("combobox", { name: "Switch to" }).locator("option")).toHaveText([
+      "Every two weeks",
+    ]);
+    await eggs.getByRole("button", { name: "Switch schedule" }).click();
+    await expect(eggs).toContainText("delivered Every two weeks");
+    await expect(eggs).toContainText(`Next Delivery due ${johannesburgTomorrow()}`);
+
+    // The lamb box offers only Monthly, so there is nothing to switch to.
+    const lamb = page.getByRole("listitem").filter({ hasText: "Karoo lamb box" });
+    await expect(lamb.getByRole("combobox", { name: "Switch to" })).toHaveCount(0);
+
+    // Espresso: cancelled, shown as cancelled with no next due date.
+    const espresso = page.getByRole("listitem").filter({ hasText: "House espresso blend" });
+    await espresso.getByRole("button", { name: "Cancel Subscription" }).click();
+    await expect(espresso).toContainText(`Cancelled on ${johannesburgDay(0)}`);
+    await expect(espresso).not.toContainText("Next Delivery due");
+    await expect(espresso.getByRole("button")).toHaveCount(0);
+
+    // ...and the Customer can subscribe to it again.
+    await page.goto("/?q=espresso");
+    await page.getByRole("link", { name: "Subscribe to House espresso blend (500 g)" }).click();
+    await page.getByRole("radio", { name: "Monthly" }).check();
+    await page.getByRole("button", { name: "Subscribe" }).click();
+    await expect(page).toHaveURL(/\/subscriptions$/);
+    await expect(espresso).toHaveCount(2);
+    await expect(espresso.first()).toContainText("delivered Monthly");
+    await expect(espresso.last()).toContainText("Cancelled on");
+  });
+
+  test("the Vendor is notified of the cancellation", async ({ page }) => {
+    await signIn(page, demo.coffeeVendor);
+    await page.getByRole("link", { name: /^Inbox/ }).click();
+    await expect(page.getByRole("listitem").nth(1)).toContainText(
+      `${demo.customer.email} cancelled their Subscription to House espresso blend (500 g).`,
+    );
+    await expect(page.getByRole("listitem").first()).toContainText(
+      `${demo.customer.email} subscribed to House espresso blend (500 g), delivered monthly.`,
+    );
   });
 });

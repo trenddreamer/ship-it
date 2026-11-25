@@ -1,10 +1,18 @@
-import { Link } from "react-router";
+import { data, Form, Link, redirect } from "react-router";
 import { requireAccount } from "~/accounts.server";
+import { FormError } from "~/components/text-field";
 import { db } from "~/db/client.server";
 import { findDeliveryAddress } from "~/modules/accounts";
 import { formatCalendarDate } from "~/modules/calendar";
 import { deliveryScheduleOptions } from "~/modules/catalogue";
-import { listCustomerSubscriptions } from "~/modules/subscriptions";
+import {
+  cancelSubscription,
+  changeSubscriptionSchema,
+  listCustomerSubscriptions,
+  switchDeliverySchedule,
+  type SwitchRefusal,
+} from "~/modules/subscriptions";
+import { today } from "~/today.server";
 import type { Route } from "./+types/subscriptions";
 
 export function meta(_: Route.MetaArgs) {
@@ -23,12 +31,35 @@ export async function loader({ request }: Route.LoaderArgs) {
     subscriptions: subscriptions.map((subscription) => ({
       ...subscription,
       schedule: scheduleLabels.get(subscription.deliverySchedule),
-      nextDue: formatCalendarDate(subscription.nextDueOn),
+      nextDue: subscription.nextDueOn && formatCalendarDate(subscription.nextDueOn),
+      cancelled: subscription.cancelledOn && formatCalendarDate(subscription.cancelledOn),
+      switchTo: subscription.switchTo.map((value) => ({ value, label: scheduleLabels.get(value) })),
     })),
   };
 }
 
-export default function Subscriptions({ loaderData }: Route.ComponentProps) {
+const refusals: Record<SwitchRefusal, string> = {
+  "subscription-not-found": "That Subscription isn't active any more.",
+  "schedule-not-offered": "Pick one of the Delivery Schedules this Product offers.",
+  "same-schedule": "That Subscription is already on that Delivery Schedule.",
+};
+
+export async function action({ request }: Route.ActionArgs) {
+  const account = await requireAccount(request, "customer");
+  const parsed = changeSubscriptionSchema.safeParse(Object.fromEntries(await request.formData()));
+  if (!parsed.success) {
+    return data({ formError: "Pick a Delivery Schedule to switch to." }, 400);
+  }
+  const change = parsed.data;
+  const result =
+    change.intent === "switch"
+      ? await switchDeliverySchedule(db, account.id, change, today())
+      : await cancelSubscription(db, account.id, change.subscriptionId, today());
+  if (result.ok) return redirect("/subscriptions");
+  return data({ formError: refusals[result.error] }, 409);
+}
+
+export default function Subscriptions({ loaderData, actionData }: Route.ComponentProps) {
   const { address, subscriptions } = loaderData;
   return (
     <main className="mx-auto max-w-3xl p-8">
@@ -39,25 +70,67 @@ export default function Subscriptions({ loaderData }: Route.ComponentProps) {
           {address ? "Change your Delivery Address" : "Set your Delivery Address"}
         </Link>
       </p>
+      <div className="mt-4">
+        <FormError message={actionData?.formError} />
+      </div>
       {subscriptions.length === 0 ? (
         <p className="mt-8 text-gray-600">
           No Subscriptions yet. <Link to="/">Find a Product</Link> to subscribe to.
         </p>
       ) : (
-        <ul className="mt-8 divide-y divide-gray-100">
+        <ul className="mt-4 divide-y divide-gray-100">
           {subscriptions.map((subscription) => (
-            <li key={subscription.id} className="flex justify-between gap-6 py-3">
-              <div>
-                <h2 className="font-medium">{subscription.productName}</h2>
-                <p className="text-sm text-gray-600">
-                  From {subscription.vendorName}, delivered {subscription.schedule}
+            <li key={subscription.id} className="py-3">
+              <div className="flex justify-between gap-6">
+                <div>
+                  <h2 className="font-medium">{subscription.productName}</h2>
+                  <p className="text-sm text-gray-600">
+                    From {subscription.vendorName}, delivered {subscription.schedule}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    {subscription.cancelled
+                      ? `Cancelled on ${subscription.cancelled}`
+                      : `Next Delivery due ${subscription.nextDue}`}
+                  </p>
+                </div>
+                <p className="shrink-0 text-right">
+                  <span className="font-semibold">{subscription.price}</span>
+                  <span className="block text-xs text-gray-500">per Delivery</span>
                 </p>
-                <p className="mt-1 text-sm">Next Delivery due {subscription.nextDue}</p>
               </div>
-              <p className="shrink-0 text-right">
-                <span className="font-semibold">{subscription.price}</span>
-                <span className="block text-xs text-gray-500">per Delivery</span>
-              </p>
+              {subscription.cancelled ? null : (
+                <div className="mt-2 flex flex-wrap items-end gap-4 text-sm">
+                  {subscription.switchTo.length > 0 ? (
+                    <Form method="post" className="flex items-end gap-2">
+                      <input type="hidden" name="intent" value="switch" />
+                      <input type="hidden" name="subscriptionId" value={subscription.id} />
+                      <label>
+                        Switch to{" "}
+                        <select
+                          name="deliverySchedule"
+                          className="rounded border border-gray-300 px-2 py-1"
+                        >
+                          {subscription.switchTo.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button type="submit" className="rounded border border-gray-300 px-3 py-1">
+                        Switch schedule
+                      </button>
+                    </Form>
+                  ) : null}
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="cancel" />
+                    <input type="hidden" name="subscriptionId" value={subscription.id} />
+                    <button type="submit" className="rounded border border-red-300 px-3 py-1">
+                      Cancel Subscription
+                    </button>
+                  </Form>
+                </div>
+              )}
             </li>
           ))}
         </ul>
