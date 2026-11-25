@@ -6,17 +6,15 @@ const token = "test-token-123";
 const repo = "someone/marketplace";
 const issueUrl = "https://github.com/someone/marketplace/issues/42";
 
-/** A stub `fetch` that answers every call with `response`, and keeps each call. */
-function stubFetch(response: () => Response | Promise<Response>) {
-  return vi.fn<typeof fetch>(async () => response());
-}
-
+/** A stub `fetch` that answers every call with `status` and `body`, and keeps each call. */
 function answer(status: number, body: unknown) {
-  return () =>
-    new Response(typeof body === "string" ? body : JSON.stringify(body), {
-      status,
-      headers: { "Content-Type": "application/json" },
-    });
+  return vi.fn<typeof fetch>(
+    async () =>
+      new Response(typeof body === "string" ? body : JSON.stringify(body), {
+        status,
+        headers: { "Content-Type": "application/json" },
+      }),
+  );
 }
 
 async function send(fetch: typeof globalThis.fetch) {
@@ -32,7 +30,7 @@ async function send(fetch: typeof globalThis.fetch) {
 }
 
 /** The one call made to `fetch`, as the URL and the request options. */
-function onlyCall(fetch: ReturnType<typeof stubFetch>) {
+function onlyCall(fetch: ReturnType<typeof answer>) {
   expect(fetch).toHaveBeenCalledTimes(1);
   const [url, init] = fetch.mock.calls[0]!;
   return { url, init: init!, headers: new Headers(init!.headers) };
@@ -45,7 +43,7 @@ describe("the GitHub tracker", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("POSTs to the repo's issues in GitHub's REST API", async () => {
-    const fetch = stubFetch(answer(201, { html_url: issueUrl }));
+    const fetch = answer(201, { html_url: issueUrl });
 
     await send(fetch);
 
@@ -55,7 +53,7 @@ describe("the GitHub tracker", () => {
   });
 
   it("authenticates with the token, asks for GitHub's JSON and names a generic client", async () => {
-    const fetch = stubFetch(answer(201, { html_url: issueUrl }));
+    const fetch = answer(201, { html_url: issueUrl });
 
     await send(fetch);
 
@@ -67,7 +65,7 @@ describe("the GitHub tracker", () => {
   });
 
   it("sends the title, body and both labels as JSON, in the one call", async () => {
-    const fetch = stubFetch(answer(201, { html_url: issueUrl }));
+    const fetch = answer(201, { html_url: issueUrl });
 
     await send(fetch);
 
@@ -82,7 +80,7 @@ describe("the GitHub tracker", () => {
   });
 
   it("gives back the issue's html_url as the URL Feedback was sent to, and records the row", async () => {
-    const fetch = stubFetch(answer(201, { html_url: issueUrl, id: 1, number: 42 }));
+    const fetch = answer(201, { html_url: issueUrl, id: 1, number: 42 });
 
     const { database, account, result } = await send(fetch);
 
@@ -97,7 +95,7 @@ describe("the GitHub tracker", () => {
     ["an html_url that isn't a string", { html_url: 42 }],
     ["a body that isn't JSON", "Created"],
   ])("counts an OK answer with %s as sent, with no URL", async (_, body) => {
-    const fetch = stubFetch(answer(201, body));
+    const fetch = answer(201, body);
 
     const { database, account, result } = await send(fetch);
 
@@ -114,7 +112,7 @@ describe("the GitHub tracker", () => {
   ])(
     "fails on a %i, records nothing, and logs the status and GitHub's answer",
     async (status, text) => {
-      const fetch = stubFetch(answer(status, `{"message":"${text}"}`));
+      const fetch = answer(status, `{"message":"${text}"}`);
 
       const { database, result } = await send(fetch);
 
@@ -128,7 +126,9 @@ describe("the GitHub tracker", () => {
   );
 
   it("fails and records nothing when the network fails", async () => {
-    const fetch = stubFetch(() => Promise.reject(new TypeError("fetch failed")));
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => {
+      throw new TypeError("fetch failed");
+    });
 
     const { database, result } = await send(fetch);
 
