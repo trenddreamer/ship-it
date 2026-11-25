@@ -16,6 +16,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* Lets the browser paint the dark background before the stylesheet loads. */}
+        <meta name="color-scheme" content="light dark" />
         <Meta />
         <Links />
       </head>

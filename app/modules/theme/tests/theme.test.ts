@@ -68,6 +68,11 @@ describe("the theme", () => {
     expect(declarations(":root")).toMatchObject({ "color-scheme": "light dark" });
   });
 
+  it("tells the browser before the stylesheet loads, so a dark page doesn't flash white", () => {
+    const root = readFileSync(join(appDir, "root.tsx"), "utf8");
+    expect(root).toMatch(/<meta name="color-scheme" content="light dark" \/>/);
+  });
+
   it("is dark in the dark scheme and light in the light one", () => {
     for (const name of ["surface", "raised"]) {
       expect(luminance(colour(name, "light"))).toBeGreaterThan(0.8);
