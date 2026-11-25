@@ -27,6 +27,7 @@ export function readJobRequest(
   settings: JobSettings,
   realToday: CalendarDate,
 ): JobRequest {
+  // Stryker disable next-line StringLiteral: equivalent, a missing header never equals "Bearer <secret>" whatever it defaults to
   if (!sameSecret(request.headers.get("authorization") ?? "", `Bearer ${settings.secret}`)) {
     return { ok: false, status: 401, message: "This job needs its secret." };
   }
