@@ -37,6 +37,7 @@ describe("subscribing", () => {
         price: "R\u00a0150,50",
         nextDueOn: "2026-11-26",
         cancelledOn: null,
+        switchTo: ["weekly"],
       },
     ]);
   });

@@ -1,5 +1,12 @@
-import { asc, desc, eq, sql } from "drizzle-orm";
-import { products, subscriptions, vendors, type DeliverySchedule } from "~/db/schema";
+import { asc, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  deliverySchedules,
+  productDeliverySchedules,
+  products,
+  subscriptions,
+  vendors,
+  type DeliverySchedule,
+} from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
 import { formatPrice } from "~/modules/price";
 import type { MarketplaceDatabase } from "~/modules/vendors";
@@ -18,6 +25,11 @@ export interface CustomerSubscription {
   nextDueOn: CalendarDate | null;
   /** The day it was cancelled; null while it is active. */
   cancelledOn: CalendarDate | null;
+  /**
+   * The other Delivery Schedules its Product offers, in the fixed order, that
+   * the Customer can switch to. Empty once cancelled.
+   */
+  switchTo: DeliverySchedule[];
 }
 
 /**
@@ -32,6 +44,7 @@ export async function listCustomerSubscriptions(
   const rows = await database
     .select({
       id: subscriptions.id,
+      productId: subscriptions.productId,
       productName: products.name,
       vendorName: vendors.name,
       deliverySchedule: subscriptions.deliverySchedule,
@@ -50,9 +63,31 @@ export async function listCustomerSubscriptions(
       desc(subscriptions.id),
     )
     .all();
-  return rows.map((row) => ({
-    ...row,
-    nextDueOn: row.cancelledOn === null ? row.nextDueOn : null,
-    price: formatPrice(row.priceCents),
-  }));
+  const offered = await database
+    .select({
+      productId: productDeliverySchedules.productId,
+      deliverySchedule: productDeliverySchedules.deliverySchedule,
+    })
+    .from(productDeliverySchedules)
+    .where(
+      inArray(
+        productDeliverySchedules.productId,
+        rows.map((row) => row.productId),
+      ),
+    )
+    .all();
+  return rows.map(({ productId, ...row }) => {
+    const active = row.cancelledOn === null;
+    const offeredHere = new Set(
+      offered.filter((o) => o.productId === productId).map((o) => o.deliverySchedule),
+    );
+    return {
+      ...row,
+      nextDueOn: active ? row.nextDueOn : null,
+      price: formatPrice(row.priceCents),
+      switchTo: active
+        ? deliverySchedules.filter((s) => s !== row.deliverySchedule && offeredHere.has(s))
+        : [],
+    };
+  });
 }

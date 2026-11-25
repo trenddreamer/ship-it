@@ -9,6 +9,7 @@ export {
   type SubscribeResult,
 } from "./lib/subscribe";
 export { subscribeSchema } from "./lib/subscribe-schema";
+export { changeSubscriptionSchema } from "./lib/change-subscription-schema";
 export { cancelSubscription, type CancelRefusal, type CancelResult } from "./lib/cancel";
 export {
   switchDeliverySchedule,

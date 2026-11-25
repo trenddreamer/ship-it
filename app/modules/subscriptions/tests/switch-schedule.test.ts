@@ -83,4 +83,47 @@ describe("switching Delivery Schedule", () => {
       { deliverySchedule: "weekly", nextDueOn: "2026-11-02" },
     ]);
   });
+
+  it("lists the other schedules the Product offers as the ones to switch to", async () => {
+    const database = await freshDatabase();
+    const { vendorId } = await addVendor(database, "Karoo Farm");
+    const eggs = await addVendorProduct(database, vendorId, "Free-range eggs", {
+      deliverySchedules: ["monthly", "weekly", "every-two-weeks"],
+    });
+    const lamb = await addVendorProduct(database, vendorId, "Lamb box", {
+      deliverySchedules: ["monthly"],
+    });
+    const thandi = await addCustomer(database, "thandi@example.test");
+    await subscribe(
+      database,
+      thandi,
+      { productId: eggs, deliverySchedule: "weekly" },
+      "2026-11-01",
+    );
+    await subscribe(
+      database,
+      thandi,
+      { productId: lamb, deliverySchedule: "monthly" },
+      "2026-11-01",
+    );
+    const [eggsSubscription] = await listCustomerSubscriptions(database, thandi);
+
+    expect(
+      (await listCustomerSubscriptions(database, thandi)).map((s) => [s.productName, s.switchTo]),
+    ).toEqual([
+      ["Free-range eggs", ["every-two-weeks", "monthly"]],
+      ["Lamb box", []],
+    ]);
+
+    await switchDeliverySchedule(
+      database,
+      thandi,
+      { subscriptionId: eggsSubscription!.id, deliverySchedule: "monthly" },
+      "2026-11-02",
+    );
+    expect((await listCustomerSubscriptions(database, thandi))[0]!.switchTo).toEqual([
+      "weekly",
+      "every-two-weeks",
+    ]);
+  });
 });

@@ -32,6 +32,7 @@ describe("cancelling a Subscription", () => {
         productName: "Free-range eggs",
         cancelledOn: "2026-11-20",
         nextDueOn: null,
+        switchTo: [],
       },
     ]);
   });
