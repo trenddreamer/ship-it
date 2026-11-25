@@ -26,8 +26,8 @@ export interface ShownVendor {
  * without Products are included with an empty list. Pending and rejected
  * Vendors, and their Products, are never returned.
  */
-export function listApprovedVendors(database: MarketplaceDatabase): ShownVendor[] {
-  const approved = database
+export async function listApprovedVendors(database: MarketplaceDatabase): Promise<ShownVendor[]> {
+  const approved = await database
     .select({ id: vendors.id, name: vendors.name, description: vendors.description })
     .from(vendors)
     .where(eq(vendors.approvalStatus, "approved"))
@@ -38,7 +38,7 @@ export function listApprovedVendors(database: MarketplaceDatabase): ShownVendor[
   // Stryker disable next-line ConditionalExpression: equivalent, it only saves a query
   if (approved.length === 0) return [];
 
-  const rows = database
+  const rows = await database
     .select()
     .from(products)
     .where(

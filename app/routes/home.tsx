@@ -8,8 +8,8 @@ export function meta(_: Route.MetaArgs) {
 
 // Routes stay thin: loaders and actions call modules in app/modules/, they
 // hold no logic.
-export function loader() {
-  return { vendors: listApprovedVendors(db) };
+export async function loader() {
+  return { vendors: await listApprovedVendors(db) };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {

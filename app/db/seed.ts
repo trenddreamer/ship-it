@@ -7,7 +7,7 @@
 //
 // Add seed data here as tables are added to schema.ts.
 import { sql } from "drizzle-orm";
-import { databasePath, db, type DB } from "./client.server";
+import { databaseLocation, db, type DB } from "./client.server";
 import { products, vendors, type VendorApprovalStatus } from "./schema";
 
 interface SeedVendor {
@@ -93,25 +93,29 @@ const seedVendors: SeedVendor[] = [
 ];
 
 /** The tables that already hold rows, ignoring Drizzle's own bookkeeping. */
-function tablesWithRows(database: DB): string[] {
-  const tables = database.all<{ name: string }>(
+async function tablesWithRows(database: DB): Promise<string[]> {
+  const tables = await database.all<{ name: string }>(
     sql`select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and name != '__drizzle_migrations'`,
   );
-  return tables
-    .map(({ name }) => name)
-    .filter((name) => database.get(sql`select 1 from ${sql.identifier(name)} limit 1`));
+  const filled: string[] = [];
+  for (const { name } of tables) {
+    // `all`, not `get`: Drizzle's libSQL `get` throws on a raw query with no rows.
+    const rows = await database.all(sql`select 1 from ${sql.identifier(name)} limit 1`);
+    if (rows.length > 0) filled.push(name);
+  }
+  return filled;
 }
 
-export function seed(database: DB): void {
-  const filled = tablesWithRows(database);
+export async function seed(database: DB): Promise<void> {
+  const filled = await tablesWithRows(database);
   if (filled.length > 0) {
     throw new Error(
-      `${databasePath} already has rows in ${filled.join(", ")}. The seed only fills an empty database. Run \`npm run db:reset\` to start again.`,
+      `${databaseLocation} already has rows in ${filled.join(", ")}. The seed only fills an empty database. Run \`npm run db:reset\` to start again.`,
     );
   }
-  database.transaction((tx) => {
+  await database.transaction(async (tx) => {
     for (const vendor of seedVendors) {
-      const { id } = tx
+      const { id } = await tx
         .insert(vendors)
         .values({
           name: vendor.name,
@@ -121,7 +125,8 @@ export function seed(database: DB): void {
         .returning({ id: vendors.id })
         .get();
       for (const product of vendor.products) {
-        tx.insert(products)
+        await tx
+          .insert(products)
           .values({ vendorId: id, ...product })
           .run();
       }
@@ -129,5 +134,5 @@ export function seed(database: DB): void {
   });
 }
 
-seed(db);
-console.log(`Seeded ${databasePath}.`);
+await seed(db);
+console.log(`Seeded ${databaseLocation}.`);
