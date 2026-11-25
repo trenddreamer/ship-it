@@ -156,3 +156,26 @@ export const notifications = sqliteTable(
   },
   (table) => [index("notifications_account_id_idx").on(table.accountId)],
 );
+
+/**
+ * One shipment of a Product to a Customer under a Subscription. It exists
+ * once it has fallen due, and records then the Price it will be charged, in
+ * whole cents. Shipped once the Vendor marks it so. A Subscription has at most
+ * one Delivery per due date.
+ */
+export const deliveries = sqliteTable(
+  "deliveries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    subscriptionId: integer("subscription_id")
+      .notNull()
+      .references(() => subscriptions.id, { onDelete: "cascade" }),
+    /** The day it falls due, "YYYY-MM-DD" in Africa/Johannesburg. */
+    dueOn: text("due_on").notNull(),
+    /** The Price it will be charged, recorded when it fell due. */
+    priceCents: integer("price_cents").notNull(),
+    /** The day the Vendor marked it shipped; null until then. */
+    shippedOn: text("shipped_on"),
+  },
+  (table) => [uniqueIndex("deliveries_one_per_due_date").on(table.subscriptionId, table.dueOn)],
+);
