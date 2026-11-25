@@ -39,7 +39,6 @@ export async function endSubscriptions(
     .where(and(isNull(subscriptions.cancelledOn), matching(which)))
     .returning({ id: subscriptions.id })
     .all();
-  if (ended.length === 0) return [];
   return database
     .select({
       id: subscriptions.id,
