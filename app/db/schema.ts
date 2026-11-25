@@ -28,7 +28,11 @@ export const vendors = sqliteTable("vendors", {
     .default("pending"),
 });
 
-/** A physical good a Vendor sells. Price is per Delivery, in whole cents. */
+/**
+ * A physical good a Vendor sells. Price is per Delivery, in whole cents.
+ * Once its Vendor stops selling it, `stopped_on` is the day they did, for
+ * good: Customers no longer see it, and it can't be restarted.
+ */
 export const products = sqliteTable(
   "products",
   {
@@ -39,6 +43,8 @@ export const products = sqliteTable(
     name: text("name").notNull(),
     description: text("description").notNull().default(""),
     priceCents: integer("price_cents").notNull(),
+    /** The day its Vendor stopped selling it (YYYY-MM-DD); null while on sale. */
+    stoppedOn: text("stopped_on"),
   },
   (table) => [index("products_vendor_id_idx").on(table.vendorId)],
 );
@@ -50,6 +56,8 @@ export type DeliverySchedule = (typeof deliverySchedules)[number];
 /**
  * A Delivery Schedule a Product offers: one row per schedule, and a Product
  * offers at least one (the catalogue module enforces that when it adds one).
+ * When a Vendor stops offering a schedule, its row is deleted; stopping the
+ * last one stops the Product instead, so the row stays.
  */
 export const productDeliverySchedules = sqliteTable(
   "product_delivery_schedules",
