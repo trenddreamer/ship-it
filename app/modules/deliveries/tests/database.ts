@@ -89,6 +89,22 @@ export async function setPrice(
     .run();
 }
 
+/**
+ * Marks a Delivery shipped in place. No module ships Deliveries yet (#15
+ * will); until then this stands in for it.
+ */
+export async function markShipped(
+  database: MarketplaceDatabase,
+  deliveryId: number,
+  shippedOn: CalendarDate,
+): Promise<void> {
+  await database
+    .update(schema.deliveries)
+    .set({ shippedOn })
+    .where(eq(schema.deliveries.id, deliveryId))
+    .run();
+}
+
 /** Subscribes a Customer to a Product on `subscribedOn`. Returns the Subscription's id. */
 export async function addSubscription(
   database: MarketplaceDatabase,
