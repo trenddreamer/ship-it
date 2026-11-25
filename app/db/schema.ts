@@ -239,7 +239,8 @@ export const charges = sqliteTable("charges", {
 
 /**
  * Who gave Feedback, and when: one row per piece of Feedback sent to the
- * Factory. It holds nothing else on purpose: no text, no issue number and no
+ * Factory. If recording fails after the issue has opened, the Feedback still
+ * counts as sent and has no row. It holds nothing else on purpose: no text, no issue number and no
  * URL. Feedback becomes a public issue, and nothing in the Marketplace may
  * link an Account to a public issue.
  */

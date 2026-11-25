@@ -1,3 +1,4 @@
+import { DrizzleQueryError } from "drizzle-orm";
 import { feedback } from "~/db/schema";
 import type { MarketplaceDatabase } from "~/db/database";
 import type { Account } from "~/modules/accounts";
@@ -25,7 +26,9 @@ export type FeedbackResult =
  * Sends Feedback to the Factory through the tracker, then records who gave
  * it and when. The text, trimmed, must be 10–2,000 characters. When it isn't,
  * or the tracker fails, nothing is recorded; a tracker's error is logged, not
- * retried.
+ * retried. Once the issue is open the Feedback counts as sent: if recording
+ * it then fails, the error is logged (without the Account) and the result is
+ * still `sent`, so the person isn't invited to send it again.
  */
 export async function giveFeedback(
   database: MarketplaceDatabase,
@@ -50,6 +53,21 @@ export async function giveFeedback(
     console.error("Feedback couldn't be sent to the tracker:", error);
     return { kind: "failed" };
   }
-  await database.insert(feedback).values({ accountId: input.account.id });
+  try {
+    await database.insert(feedback).values({ accountId: input.account.id });
+  } catch (error) {
+    const issue = issueUrl === undefined ? "" : ` (issue: ${issueUrl})`;
+    console.error(`Feedback was sent but couldn't be recorded${issue}:`, withoutParams(error));
+  }
   return issueUrl === undefined ? { kind: "sent" } : { kind: "sent", issueUrl };
+}
+
+/**
+ * The error to log for a failed insert. A Drizzle query error carries the
+ * query's parameters, here the Account id, and nothing in the Marketplace may
+ * link an Account to a public issue, so it gives way to its cause.
+ */
+function withoutParams(error: unknown): unknown {
+  if (!(error instanceof DrizzleQueryError)) return error;
+  return error.cause ?? `Failed query: ${error.query}`;
 }
