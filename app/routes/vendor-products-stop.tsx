@@ -1,5 +1,5 @@
 import { Form, Link, redirect } from "react-router";
-import { requireAccount } from "~/accounts.server";
+import { requireActingVendor } from "~/accounts.server";
 import { db } from "~/db/client.server";
 import { previewStop, stopSchema, stopSelling } from "~/modules/catalogue";
 import { deliveryScheduleLabel } from "~/modules/deliveries";
@@ -15,7 +15,7 @@ function notFound(): never {
 }
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const account = await requireAccount(request, "vendor");
+  const account = await requireActingVendor(request);
   const url = new URL(request.url);
   const parsed = stopSchema.safeParse({ ...params, ...Object.fromEntries(url.searchParams) });
   if (!parsed.success) notFound();
@@ -28,7 +28,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const account = await requireAccount(request, "vendor");
+  const account = await requireActingVendor(request);
   const formData = await request.formData();
   const parsed = stopSchema.safeParse({ ...params, ...Object.fromEntries(formData) });
   if (!parsed.success) notFound();

@@ -1,10 +1,9 @@
 import { data, Form, Link, redirect } from "react-router";
 import { z } from "zod";
-import { requireAccount } from "~/accounts.server";
+import { requireActingVendor } from "~/accounts.server";
 import { FormError, TextField } from "~/components/text-field";
 import { db } from "~/db/client.server";
 import { changePrice, changePriceSchema, listVendorProducts } from "~/modules/catalogue";
-import { findVendor } from "~/modules/vendors";
 import { today } from "~/today.server";
 import type { Route } from "./+types/vendor-products-price";
 
@@ -16,18 +15,8 @@ function notFound(): never {
   throw new Response("That Product wasn't found.", { status: 404 });
 }
 
-/** The signed-in Vendor's Account. A rejected Vendor sees only that it was rejected. */
-async function requireVendorNotRejected(request: Request) {
-  const account = await requireAccount(request, "vendor");
-  const vendor = await findVendor(db, account.vendorId);
-  if (vendor?.approvalStatus === "rejected") {
-    throw new Response("Your business was rejected, so it can't change Prices.", { status: 403 });
-  }
-  return account;
-}
-
 export async function loader({ request, params }: Route.LoaderArgs) {
-  const account = await requireVendorNotRejected(request);
+  const account = await requireActingVendor(request);
   const products = await listVendorProducts(db, account.vendorId);
   const product = products.find((p) => String(p.id) === params.productId);
   if (!product) notFound();
@@ -35,7 +24,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const account = await requireVendorNotRejected(request);
+  const account = await requireActingVendor(request);
   const parsed = changePriceSchema.safeParse({
     ...Object.fromEntries(await request.formData()),
     productId: params.productId,

@@ -1,11 +1,10 @@
 import { data, Form, Link, redirect } from "react-router";
 import { z } from "zod";
-import { requireAccount } from "~/accounts.server";
+import { requireActingVendor } from "~/accounts.server";
 import { TextField } from "~/components/text-field";
 import { db } from "~/db/client.server";
 import { addProduct, newProductSchema } from "~/modules/catalogue";
 import { deliveryScheduleOptions } from "~/modules/deliveries";
-import { findVendor } from "~/modules/vendors";
 import { today } from "~/today.server";
 import type { Route } from "./+types/vendor-products-new";
 
@@ -13,23 +12,13 @@ export function meta(_: Route.MetaArgs) {
   return [{ title: "Add a Product · Marketplace" }];
 }
 
-/** The signed-in Vendor's Account. A rejected Vendor sees only that it was rejected. */
-async function requireVendorNotRejected(request: Request) {
-  const account = await requireAccount(request, "vendor");
-  const vendor = await findVendor(db, account.vendorId);
-  if (vendor?.approvalStatus === "rejected") {
-    throw new Response("Your business was rejected, so it can't add Products.", { status: 403 });
-  }
-  return account;
-}
-
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireVendorNotRejected(request);
+  await requireActingVendor(request);
   return null;
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  const account = await requireVendorNotRejected(request);
+  const account = await requireActingVendor(request);
   const formData = await request.formData();
   const parsed = newProductSchema.safeParse({
     ...Object.fromEntries(formData),

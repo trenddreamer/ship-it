@@ -1,5 +1,5 @@
 import { data, Link, redirect } from "react-router";
-import { requireAccount } from "~/accounts.server";
+import { requireAccount, requireActingVendor } from "~/accounts.server";
 import { ChargeList } from "~/components/charge-list";
 import { DueDeliveries } from "~/components/due-deliveries";
 import { ProductSubscriptions } from "~/components/product-subscriptions";
@@ -16,7 +16,7 @@ import {
   type ShipRefusal,
 } from "~/modules/deliveries";
 import { listVendorSubscriptions } from "~/modules/subscriptions";
-import { findVendor } from "~/modules/vendors";
+import { findVendor, vendorMayAct } from "~/modules/vendors";
 import { today } from "~/today.server";
 import type { Route } from "./+types/vendor";
 
@@ -35,8 +35,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const account = await requireAccount(request, "vendor");
   const vendor = await findVendor(db, account.vendorId);
   if (!vendor) throw new Response("Your Vendor wasn't found.", { status: 404 });
-  // A rejected Vendor sees only that it was rejected.
-  if (vendor.approvalStatus === "rejected") {
+  // A rejected Vendor may not act, so it sees only that it was rejected.
+  if (!(await vendorMayAct(db, vendor.id))) {
     return { vendor, products: null, subscriptions: {}, dueDeliveries: [], charges: [] };
   }
   const byProduct = await listVendorSubscriptions(db, account.vendorId);
@@ -77,11 +77,7 @@ const shipRefusals: Record<ShipRefusal, string> = {
 
 /** Marks one of the Vendor's due Deliveries shipped, today, which charges the Customer. */
 export async function action({ request }: Route.ActionArgs) {
-  const account = await requireAccount(request, "vendor");
-  const vendor = await findVendor(db, account.vendorId);
-  if (vendor?.approvalStatus === "rejected") {
-    throw new Response("Your business was rejected, so it can't ship Deliveries.", { status: 403 });
-  }
+  const account = await requireActingVendor(request);
   const parsed = shipDeliverySchema.safeParse(Object.fromEntries(await request.formData()));
   if (!parsed.success) return data({ formError: "Pick a Delivery to mark shipped." }, 400);
   const result = await shipDelivery(db, account.vendorId, parsed.data.deliveryId, today());

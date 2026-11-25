@@ -1,6 +1,7 @@
 import { createCookieSessionStorage, redirect } from "react-router";
 import type { AccountKind } from "~/db/schema";
 import type { MarketplaceDatabase } from "~/db/database";
+import { vendorMayAct } from "~/modules/vendors";
 import { findAccount, type Account, type AccountOf } from "./account";
 
 /** Where a visitor goes to sign in, when a page needs an Account. */
@@ -48,24 +49,43 @@ export function createAccountSessions(database: MarketplaceDatabase, options: Se
     return id === undefined ? null : findAccount(database, id);
   }
 
+  /**
+   * The signed-in Account, when it is one of `kinds`. Otherwise throws: a
+   * redirect to sign in for a visitor, a 403 for any other kind of Account.
+   */
+  async function requireAccount<K extends AccountKind>(
+    request: Request,
+    ...kinds: [K, ...K[]]
+  ): Promise<AccountOf<K>> {
+    const account = await currentAccount(request);
+    if (!account) throw redirect(signInPath);
+    if (!(kinds as AccountKind[]).includes(account.kind)) {
+      throw new Response("This page isn't open to your Account.", { status: 403 });
+    }
+    return account as AccountOf<K>;
+  }
+
   return {
     /** The signed-in Account, or null for a visitor. */
     currentAccount,
 
+    requireAccount,
+
     /**
-     * The signed-in Account, when it is one of `kinds`. Otherwise throws: a
-     * redirect to sign in for a visitor, a 403 for any other kind of Account.
+     * The signed-in Vendor Account, when its Vendor may act (see
+     * `vendorMayAct`): every Vendor page and action that changes something
+     * starts with this. Throws like `requireAccount(request, "vendor")`, and
+     * a 403 for a rejected Vendor.
      */
-    async requireAccount<K extends AccountKind>(
-      request: Request,
-      ...kinds: [K, ...K[]]
-    ): Promise<AccountOf<K>> {
-      const account = await currentAccount(request);
-      if (!account) throw redirect(signInPath);
-      if (!(kinds as AccountKind[]).includes(account.kind)) {
-        throw new Response("This page isn't open to your Account.", { status: 403 });
+    async requireActingVendor(request: Request): Promise<AccountOf<"vendor">> {
+      const account = await requireAccount(request, "vendor");
+      if (!(await vendorMayAct(database, account.vendorId))) {
+        throw new Response(
+          "An Admin rejected your business, so it can't sell on the Marketplace.",
+          { status: 403 },
+        );
       }
-      return account as AccountOf<K>;
+      return account;
     },
 
     /** Signs the Account in: a redirect to its landing page that sets the session cookie. */
