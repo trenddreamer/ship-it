@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createDueDeliveries, listVendorDueDeliveries } from "~/modules/deliveries";
+import { listCustomerCharges } from "~/modules/charges";
+import { createDueDeliveries, listVendorDueDeliveries, shipDelivery } from "~/modules/deliveries";
 import type { VendorStop } from "~/modules/subscriptions";
 import { stopSelling } from "../index";
 import { eggsWithSubscribers } from "./subscribed-eggs";
@@ -37,6 +38,20 @@ describe("Deliveries when a Vendor stops", () => {
       "thandi@example.test 2026-11-09",
       "thandi@example.test 2026-11-16",
       "sipho@example.test 2026-12-02",
+    ]);
+  });
+
+  it("can still be shipped and charged once the Product stopped", async () => {
+    const { database, karoo, eggs, thandi } = await eggsWithSubscribers();
+    await createDueDeliveries(database, "2026-11-10");
+    await stopSelling(database, karoo, { productId: eggs, deliverySchedule: null }, "2026-11-20");
+
+    const [first] = await listVendorDueDeliveries(database, karoo);
+    const shipped = await shipDelivery(database, karoo, first!.id, "2026-11-21");
+
+    expect(shipped).toEqual({ ok: true });
+    expect(await listCustomerCharges(database, thandi)).toMatchObject([
+      { productName: "Free-range eggs", amountCents: 15000, chargedOn: "2026-11-21" },
     ]);
   });
 });
