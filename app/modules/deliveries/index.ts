@@ -4,4 +4,5 @@
 // date takes "today" as a CalendarDate in Africa/Johannesburg (see
 // ~/modules/calendar); none reads the clock.
 export { createDueDeliveries } from "./lib/create-due-deliveries";
+export { catchUpSubscription } from "./lib/catch-up";
 export { listVendorDueDeliveries, type DueDelivery } from "./lib/vendor-due-deliveries";

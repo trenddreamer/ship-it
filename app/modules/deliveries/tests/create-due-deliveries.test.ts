@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { cancelSubscription, listCustomerSubscriptions } from "~/modules/subscriptions";
+import {
+  cancelSubscription,
+  listCustomerSubscriptions,
+  switchDeliverySchedule,
+} from "~/modules/subscriptions";
 import { createDueDeliveries, listVendorDueDeliveries } from "../index";
 import {
   addCustomer,
@@ -109,5 +113,36 @@ describe("createDueDeliveries after a cancellation", () => {
     await createDueDeliveries(database, "2026-11-30");
 
     expect(await dueDates()).toEqual([]);
+  });
+});
+
+describe("createDueDeliveries after a switch of Delivery Schedule", () => {
+  it("keeps a Delivery due on the day of switching under the old schedule, even when the job hadn't run", async () => {
+    const { database, thandi, subscriptionId, dueDates } = await weeklyEggsFrom("2026-11-01");
+    await createDueDeliveries(database, "2026-11-02");
+
+    await switchDeliverySchedule(
+      database,
+      thandi,
+      { subscriptionId, deliverySchedule: "monthly" },
+      "2026-11-09",
+    );
+    await createDueDeliveries(database, "2026-12-10");
+
+    expect(await dueDates()).toEqual(["2026-11-02", "2026-11-09", "2026-11-10", "2026-12-10"]);
+  });
+
+  it("runs the new schedule from the day after the switch", async () => {
+    const { database, thandi, subscriptionId, dueDates } = await weeklyEggsFrom("2026-11-01");
+
+    await switchDeliverySchedule(
+      database,
+      thandi,
+      { subscriptionId, deliverySchedule: "every-two-weeks" },
+      "2026-11-05",
+    );
+    await createDueDeliveries(database, "2026-11-20");
+
+    expect(await dueDates()).toEqual(["2026-11-02", "2026-11-06", "2026-11-20"]);
   });
 });
