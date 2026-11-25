@@ -3,7 +3,9 @@
 // and then seeded with this, so keep it deterministic and quick.
 //
 // It refuses to touch a database that already has rows, so it can never
-// wipe real data. To start again, run `npm run db:reset`.
+// wipe real data; only the first Admin may be there already, created by
+// starting the app before seeding, and it becomes the demo Admin. To start
+// again, run `npm run db:reset`.
 //
 // Add seed data here as tables are added to schema.ts.
 //
@@ -29,7 +31,7 @@ import { subscribe } from "~/modules/subscriptions";
 import { today } from "~/today.server";
 import { databaseLocation, db, type DB } from "./client.server";
 import { decideVendor } from "~/modules/vendors";
-import { type DeliverySchedule, type VendorApprovalStatus } from "./schema";
+import { accounts, type DeliverySchedule, type VendorApprovalStatus } from "./schema";
 
 const demoCustomer = { email: "customer@ship-it.test", password: "customer-password" };
 const demoVendorPassword = "vendor-password";
@@ -154,42 +156,61 @@ async function tablesWithRows(database: DB): Promise<string[]> {
   return filled;
 }
 
-export async function seed(database: DB): Promise<void> {
+/**
+ * Checks the database is empty, but for the first Admin: starting the app
+ * creates it (app/accounts.server.ts), so it may be there already if the app
+ * started between `db:migrate` and `db:seed`. Returns that Admin's Account
+ * id, or null when there is none. Throws on any other row.
+ */
+async function loneFirstAdmin(database: DB): Promise<number | null> {
   const filled = await tablesWithRows(database);
-  if (filled.length > 0) {
-    throw new Error(
-      `${databaseLocation} already has rows in ${filled.join(", ")}. The seed only fills an empty database. Run \`npm run db:reset\` to start again.`,
-    );
+  if (filled.length === 0) return null;
+  if (filled.length === 1 && filled[0] === "accounts") {
+    const rows = await database.select({ id: accounts.id, kind: accounts.kind }).from(accounts);
+    if (rows.length === 1 && rows[0]!.kind === "admin") return rows[0]!.id;
   }
+  throw new Error(
+    `${databaseLocation} already has rows in ${filled.join(", ")}. The seed only fills an empty database (a lone first Admin is fine). Run \`npm run db:reset\` to start again.`,
+  );
+}
+
+/** Signs a seed Vendor up, and decides it the way an Admin does unless it is pending. */
+async function seedVendor(
+  database: DB,
+  vendor: SeedVendor,
+  productIds: Map<string, number>,
+): Promise<void> {
+  const account = await signedUp(
+    signUpVendor(database, {
+      email: vendor.email,
+      password: demoVendorPassword,
+      businessName: vendor.name,
+      description: vendor.description,
+    }),
+  );
+  if (account.kind !== "vendor") throw new Error(`${vendor.email} isn't a Vendor Account`);
+  const id = account.vendorId;
+  // Decided the way an Admin decides, so the Vendor is told in its Inbox.
+  if (vendor.approvalStatus !== "pending") {
+    const decided = await decideVendor(database, { vendorId: id, decision: vendor.approvalStatus });
+    if (!decided.ok) throw new Error(`Deciding ${vendor.name} failed: ${decided.error}`);
+  }
+  for (const product of vendor.products) {
+    productIds.set(product.name, (await addProduct(database, id, product, today())).id);
+  }
+}
+
+export async function seed(database: DB): Promise<void> {
+  await loneFirstAdmin(database);
   // Accounts go through the same sign-up as everyone's, so their passwords
-  // are hashed the same way. That isn't one transaction: if the seed fails
+  // are hashed the same way. That isn't one transaction: the modules' entry
+  // points take the database, not a transaction. If the seed fails
   // part-way, run `npm run db:reset`.
+  // An Admin the app already made is the demo Admin; this then does nothing.
   await ensureFirstAdmin(database, config.firstAdmin);
   const customer = await signedUp(signUpCustomer(database, demoCustomer));
   const productIds = new Map<string, number>();
-  for (const vendor of seedVendors) {
-    const account = await signedUp(
-      signUpVendor(database, {
-        email: vendor.email,
-        password: demoVendorPassword,
-        businessName: vendor.name,
-        description: vendor.description,
-      }),
-    );
-    if (account.kind !== "vendor") throw new Error(`${vendor.email} isn't a Vendor Account`);
-    const id = account.vendorId;
-    // Decided the way an Admin decides, so the Vendor is told in its Inbox.
-    if (vendor.approvalStatus !== "pending") {
-      const decided = await decideVendor(database, {
-        vendorId: id,
-        decision: vendor.approvalStatus,
-      });
-      if (!decided.ok) throw new Error(`Deciding ${vendor.name} failed: ${decided.error}`);
-    }
-    for (const product of vendor.products) {
-      productIds.set(product.name, (await addProduct(database, id, product, today())).id);
-    }
-  }
+  for (const vendor of seedVendors) await seedVendor(database, vendor, productIds);
   await setDeliveryAddress(database, customer.id, demoCustomerAddress);
   // Subscribed today, so each first Delivery is due tomorrow.
   for (const { productName, deliverySchedule } of demoSubscriptions) {
