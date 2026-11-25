@@ -13,10 +13,12 @@ import { visitorAndAccountSteps } from "./journey/1-visitors-and-accounts";
 import { vendorAndProductSteps } from "./journey/2-vendors-and-products";
 import { subscribingSteps } from "./journey/3-subscribing";
 import { deliveryAndPriceSteps } from "./journey/4-deliveries-and-prices";
+import { feedbackSteps } from "./journey/5-feedback";
 
 test.describe.serial("Marketplace journey", () => {
   visitorAndAccountSteps();
   vendorAndProductSteps();
   subscribingSteps();
   deliveryAndPriceSteps();
+  feedbackSteps();
 });
