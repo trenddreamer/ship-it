@@ -25,7 +25,7 @@ _Avoid_: Big change, risky change, breaking change
 ### Selling and subscribing
 
 **Account**:
-How a person signs in to the Marketplace. Each Account is exactly one of a Customer, a Vendor or an Admin.
+How a person signs in to the Marketplace, with an email and a password. Each Account is exactly one of a Customer, a Vendor or an Admin. Customers and Vendors sign up themselves; nobody signs up as an Admin.
 _Avoid_: User, login, profile
 
 **Admin**:
@@ -49,12 +49,16 @@ An ongoing arrangement to receive one Product on a schedule. There is no vendor-
 _Avoid_: Plan, membership, order
 
 **Delivery Schedule**:
-How often a Product is delivered under a Subscription. A Vendor offers one or more Delivery Schedules for each Product, and the Customer picks one when they subscribe. A Customer can switch their Subscription to another Delivery Schedule the Vendor offers; the new schedule runs from the switch.
+How often a Product is delivered under a Subscription: weekly, every two weeks or monthly. Monthly falls due on the same day of the month each time, or the month's last day when that day doesn't exist. A Vendor offers one or more Delivery Schedules for each Product, and the Customer picks one when they subscribe. The first Delivery is due the day after the Customer subscribes. A Customer can switch their Subscription to another Delivery Schedule the Vendor offers; the new schedule runs from the switch.
 _Avoid_: Frequency, cadence, interval
 
 **Delivery**:
-One shipment of a Product to a Customer under a Subscription. A Delivery is due on its scheduled date and shipped once the Vendor marks it so; the Customer is charged only when it is shipped.
+One shipment of a Product to a Customer under a Subscription. A Delivery is due on its scheduled date and shipped once the Vendor marks it so; the Customer is charged only when it is shipped. When a Delivery falls due it records the Price it will be charged, which is the old Price if it falls due inside a Notice Period.
 _Avoid_: Shipment, order, box
+
+**Charge**:
+What a Customer pays for one shipped Delivery: the Price the Delivery recorded, on the day the Vendor marked it shipped. A Delivery gets exactly one Charge, at the moment it is marked shipped. Payments are simulated, so a Charge never fails and is never refunded. The Vendor earns the whole Charge.
+_Avoid_: Payment, transaction, invoice
 
 **Notice Period**:
 The 7 days after a Price change. Deliveries that fall due during it are still charged the old Price.
