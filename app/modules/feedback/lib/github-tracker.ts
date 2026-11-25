@@ -24,12 +24,12 @@ const openedIssue = z.object({ html_url: z.string() });
 export function githubTracker({
   token,
   repo,
-  fetch: fetchIssue = fetch,
+  fetch: callGitHub = fetch,
 }: GitHubTrackerOptions): Tracker {
   const url = `https://api.github.com/repos/${repo}/issues`;
   return {
     async openIssue({ title, body, labels }) {
-      const response = await fetchIssue(url, {
+      const response = await callGitHub(url, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
