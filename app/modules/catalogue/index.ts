@@ -7,4 +7,10 @@ export {
   type NewProduct,
 } from "./lib/products";
 export { newProductSchema } from "./lib/new-product-schema";
-export { stopSelling, type StopRefusal, type StopResult } from "./lib/stop";
+export {
+  previewStop,
+  stopSelling,
+  type StopPreview,
+  type StopRefusal,
+  type StopResult,
+} from "./lib/stop";

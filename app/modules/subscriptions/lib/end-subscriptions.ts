@@ -73,7 +73,8 @@ export async function endSubscriptions(
     .all();
 }
 
-function matching(which: SubscriptionsToEnd): SQL | undefined {
+/** The condition that picks out these Subscriptions, active or not. */
+export function matching(which: SubscriptionsToEnd): SQL | undefined {
   if ("productId" in which) {
     return and(
       eq(subscriptions.productId, which.productId),

@@ -1,7 +1,9 @@
+import { and, count, isNull } from "drizzle-orm";
+import { subscriptions } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
 import { deliveryScheduleOptions } from "~/modules/deliveries";
 import { sendNotification, type DatabaseOrTransaction } from "~/modules/notifications";
-import { endSubscriptions, type VendorStop } from "./end-subscriptions";
+import { endSubscriptions, matching, type VendorStop } from "./end-subscriptions";
 
 const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
 
@@ -33,4 +35,17 @@ export async function cancelForVendorStop(
     );
   }
   return ended.length;
+}
+
+/** How many active Subscriptions a Vendor's stop would cancel, for its warning. */
+export async function countActiveSubscriptions(
+  database: DatabaseOrTransaction,
+  stop: VendorStop,
+): Promise<number> {
+  const row = await database
+    .select({ active: count() })
+    .from(subscriptions)
+    .where(and(isNull(subscriptions.cancelledOn), matching(stop)))
+    .get();
+  return row!.active;
 }
