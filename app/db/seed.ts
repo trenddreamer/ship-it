@@ -16,7 +16,7 @@
 // - Customer: customer@ship-it.test / customer-password, with a Delivery
 //   Address and three Subscriptions (`demoSubscriptions`).
 // - Vendors: each seeded Vendor's `email` below / vendor-password.
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { config } from "~/config.server";
 import {
   ensureFirstAdmin,
@@ -31,7 +31,12 @@ import { subscribe } from "~/modules/subscriptions";
 import { today } from "~/today.server";
 import { databaseLocation, db, type DB } from "./client.server";
 import { decideVendor } from "~/modules/vendors";
-import { accounts, type DeliverySchedule, type VendorApprovalStatus } from "./schema";
+import {
+  accounts,
+  notifications,
+  type DeliverySchedule,
+  type VendorApprovalStatus,
+} from "./schema";
 
 const demoCustomer = { email: "customer@ship-it.test", password: "customer-password" };
 const demoVendorPassword = "vendor-password";
@@ -201,16 +206,25 @@ async function seedVendor(
 }
 
 export async function seed(database: DB): Promise<void> {
-  await loneFirstAdmin(database);
+  const existingAdmin = await loneFirstAdmin(database);
   // Accounts go through the same sign-up as everyone's, so their passwords
   // are hashed the same way. That isn't one transaction: the modules' entry
   // points take the database, not a transaction. If the seed fails
   // part-way, run `npm run db:reset`.
-  // An Admin the app already made is the demo Admin; this then does nothing.
-  await ensureFirstAdmin(database, config.firstAdmin);
   const customer = await signedUp(signUpCustomer(database, demoCustomer));
   const productIds = new Map<string, number>();
-  for (const vendor of seedVendors) await seedVendor(database, vendor, productIds);
+  // Vendors an Admin has already decided sign up before the demo Admin
+  // exists, so its Inbox says "awaiting approval" only for pending ones.
+  const decided = seedVendors.filter((vendor) => vendor.approvalStatus !== "pending");
+  const pending = seedVendors.filter((vendor) => vendor.approvalStatus === "pending");
+  for (const vendor of decided) await seedVendor(database, vendor, productIds);
+  if (existingAdmin !== null) {
+    // The app made the Admin first, with an empty Inbox, so all it holds
+    // now is "awaiting approval" for the Vendors just decided.
+    await database.delete(notifications).where(eq(notifications.accountId, existingAdmin));
+  }
+  await ensureFirstAdmin(database, config.firstAdmin);
+  for (const vendor of pending) await seedVendor(database, vendor, productIds);
   await setDeliveryAddress(database, customer.id, demoCustomerAddress);
   // Subscribed today, so each first Delivery is due tomorrow.
   for (const { productName, deliverySchedule } of demoSubscriptions) {
