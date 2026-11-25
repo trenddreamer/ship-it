@@ -20,11 +20,15 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx app/db/migrate.ts",
     "db:seed": "tsx app/db/seed.ts",
-    "db:reset": "tsx app/db/reset.ts && npm run db:migrate && npm run db:seed"
+    "db:reset": "tsx app/db/reset.ts && npm run db:migrate && npm run db:seed",
+    "test:mutation": "stryker run"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.14.0",
     "@react-router/dev": "^8.5.2",
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/typescript-checker": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@tailwindcss/vite": "^4.3.5",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^22.20.5",
