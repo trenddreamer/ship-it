@@ -21,7 +21,27 @@ function vendorCard(page: Page, name: string) {
 const demo = {
   admin: { email: "admin@ship-it.test", password: "admin-password" },
   customer: { email: "customer@ship-it.test", password: "customer-password" },
+  // An approved Vendor with no Products yet.
+  spiceVendor: { email: "spice@ship-it.test", password: "vendor-password" },
 };
+
+/** The Vendor who signed up in the journey, still pending. */
+const rooibosVendor = { email: "lindiwe@rooibos.test", password: "rooibos-password" };
+
+/** Adds a Product from the Vendor page through the new-Product form. */
+async function addProduct(
+  page: Page,
+  product: { name: string; description: string; price: string; schedules: string[] },
+) {
+  await page.getByRole("link", { name: "Add a Product" }).click();
+  await page.getByLabel("Name").fill(product.name);
+  await page.getByLabel("Description").fill(product.description);
+  await page.getByLabel("Price per Delivery (R)").fill(product.price);
+  for (const schedule of product.schedules) {
+    await page.getByRole("checkbox", { name: schedule }).check();
+  }
+  await page.getByRole("button", { name: "Add Product" }).click();
+}
 
 /** Signs in through the sign-in page. Waits for the sign-in page to be left. */
 async function signIn(page: Page, account: { email: string; password: string }) {
@@ -147,5 +167,55 @@ test.describe.serial("Marketplace journey", () => {
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Marketplace");
     expect((await page.goto("/vendor"))?.status()).toBe(403);
+  });
+
+  // TODO(#9): once the journey has an Admin approve a Vendor, have that
+  // Vendor add this Product instead of the seeded, already approved one.
+  test("an approved Vendor adds a Product with two Delivery Schedules, and Customers see it", async ({
+    page,
+  }) => {
+    await signIn(page, demo.spiceVendor);
+    await expect(page).toHaveURL(/\/vendor$/);
+
+    const masala = {
+      name: "Garam masala (100 g)",
+      description: "Freshly ground, blended by hand.",
+      schedules: ["Weekly", "Monthly"],
+    };
+    await addProduct(page, { ...masala, price: "-65" });
+    await expect(page.getByText("Enter the Price in rand")).toBeVisible();
+
+    await page.goto("/vendor");
+    await addProduct(page, { ...masala, price: "65,50", schedules: [] });
+    await expect(page.getByText("Pick at least one Delivery Schedule.")).toBeVisible();
+
+    await page.goto("/vendor");
+    await addProduct(page, { ...masala, price: "65,50" });
+    await expect(page).toHaveURL(/\/vendor$/);
+    const listed = page.getByRole("listitem").filter({ hasText: masala.name });
+    await expect(listed).toContainText("R 65,50");
+    await expect(listed).toContainText("Weekly, Monthly");
+
+    await page.goto("/");
+    const spice = vendorCard(page, "Durban Spice Co.");
+    await expect(spice.getByRole("heading", { level: 3 })).toHaveText([masala.name]);
+    await expect(spice).toContainText("R 65,50");
+  });
+
+  test("a pending Vendor's new Product stays hidden from Customers", async ({ page }) => {
+    await signIn(page, rooibosVendor);
+    await addProduct(page, {
+      name: "Green rooibos (250 g)",
+      description: "Unfermented rooibos leaves.",
+      price: "89",
+      schedules: ["Every two weeks"],
+    });
+    await expect(page.getByRole("listitem").filter({ hasText: "Green rooibos" })).toContainText(
+      "R 89,00",
+    );
+
+    await page.goto("/");
+    await expect(page.getByText("Green rooibos (250 g)")).toHaveCount(0);
+    await expect(page.getByText("Garam masala (100 g)")).toBeVisible();
   });
 });

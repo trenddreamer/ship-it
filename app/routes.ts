@@ -8,6 +8,7 @@ export default [
     route("sign-up/vendor", "routes/sign-up-vendor.tsx"),
     route("sign-out", "routes/sign-out.tsx"),
     route("vendor", "routes/vendor.tsx"),
+    route("vendor/products/new", "routes/vendor-products-new.tsx"),
     route("admin", "routes/admin.tsx"),
   ]),
 ] satisfies RouteConfig;
