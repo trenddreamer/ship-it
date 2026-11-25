@@ -1,4 +1,5 @@
-import { Form } from "react-router";
+import { Form, Link } from "react-router";
+import { currentAccount } from "~/accounts.server";
 import { db } from "~/db/client.server";
 import { searchQuerySchema, searchVendors } from "~/modules/search";
 import type { Route } from "./+types/home";
@@ -14,7 +15,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   const parsed = searchQuerySchema.safeParse(params);
   // A query the schema rejects shows its error, and the empty search.
   const query = parsed.success ? parsed.data.q : "";
+  const account = await currentAccount(request);
   return {
+    // Visitors see the link too; following it asks them to sign in.
+    canSubscribe: !account || account.kind === "customer",
     query,
     error: parsed.success ? undefined : parsed.error.issues[0]?.message,
     vendors: await searchVendors(db, query),
@@ -22,7 +26,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  const { query, error, vendors } = loaderData;
+  const { query, error, vendors, canSubscribe } = loaderData;
   return (
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-semibold">Marketplace</h1>
@@ -72,6 +76,15 @@ export default function Home({ loaderData }: Route.ComponentProps) {
                       <p className="shrink-0 text-right">
                         <span className="font-semibold">{product.price}</span>
                         <span className="block text-xs text-gray-500">per Delivery</span>
+                        {canSubscribe && (
+                          <Link
+                            to={`/products/${product.id}/subscribe`}
+                            aria-label={`Subscribe to ${product.name}`}
+                            className="mt-1 inline-block text-sm underline"
+                          >
+                            Subscribe
+                          </Link>
+                        )}
                       </p>
                     </li>
                   ))}

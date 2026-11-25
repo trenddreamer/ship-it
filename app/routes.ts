@@ -11,5 +11,8 @@ export default [
     route("vendor/products/new", "routes/vendor-products-new.tsx"),
     route("admin", "routes/admin.tsx"),
     route("inbox", "routes/inbox.tsx"),
+    route("delivery-address", "routes/delivery-address.tsx"),
+    route("products/:productId/subscribe", "routes/subscribe.tsx"),
+    route("subscriptions", "routes/subscriptions.tsx"),
   ]),
 ] satisfies RouteConfig;

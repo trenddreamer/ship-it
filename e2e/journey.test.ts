@@ -28,6 +28,34 @@ const demo = {
 /** The Vendor who signs up in the journey: pending, until the Admin approves it. */
 const rooibosVendor = { email: "lindiwe@rooibos.test", password: "rooibos-password" };
 
+/** The Customer who signs up in the journey, and where they live. */
+const newCustomer = { email: "naledi@example.test", password: "naledi-password" };
+const address = {
+  street: "12 Long Street",
+  suburb: "Gardens",
+  city: "Cape Town",
+  postalCode: "8001",
+};
+
+/** Fills in and saves the Delivery Address form. */
+async function fillAddress(page: Page, value: typeof address) {
+  await page.getByLabel("Street address").fill(value.street);
+  await page.getByLabel("Suburb").fill(value.suburb);
+  await page.getByLabel("City or town").fill(value.city);
+  await page.getByLabel("Postal code").fill(value.postalCode);
+  await page.getByRole("button", { name: "Save Delivery Address" }).click();
+}
+
+/** Tomorrow's date in Johannesburg (no daylight saving there), as the app shows dates. */
+function johannesburgTomorrow() {
+  return new Intl.DateTimeFormat("en-ZA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Africa/Johannesburg",
+  }).format(new Date(Date.now() + 24 * 60 * 60 * 1000));
+}
+
 /** Adds a Product from the Vendor page through the new-Product form. */
 async function addProduct(
   page: Page,
@@ -167,6 +195,14 @@ test.describe.serial("Marketplace journey", () => {
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Marketplace");
     expect((await page.goto("/vendor"))?.status()).toBe(403);
+
+    await page.goto("/");
+    await page.getByRole("link", { name: "Your Subscriptions" }).click();
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText([
+      "Free-range eggs (30)",
+      "House espresso blend (500 g)",
+      "Karoo lamb box",
+    ]);
   });
 
   test("the Admin finds the Vendor sign-up in their Inbox, and it is read once opened", async ({
@@ -292,5 +328,72 @@ test.describe.serial("Marketplace journey", () => {
       chai.name,
     ]);
     await expect(rooibos).toContainText("R 65,50");
+  });
+
+  test("a Customer signs up, sets a Delivery Address, finds the chai and subscribes", async ({
+    page,
+  }) => {
+    await page.goto("/sign-up");
+    await page.getByLabel("Email").fill(newCustomer.email);
+    await page.getByLabel("Password").fill(newCustomer.password);
+    await page.getByRole("button", { name: "Sign up" }).click();
+    await expect(page).toHaveURL(/\/$/);
+
+    const search = page.getByRole("searchbox", { name: "Search" });
+    await search.fill("chai");
+    await search.press("Enter");
+    await page.getByRole("link", { name: "Subscribe to Rooibos chai (100 g)" }).click();
+
+    // No Delivery Address yet, so they're asked for one first.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Your Delivery Address");
+    await fillAddress(page, { ...address, postalCode: "80" });
+    await expect(page.getByText("Enter the 4-digit postal code.")).toBeVisible();
+    await fillAddress(page, address);
+
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "Subscribe to Rooibos chai (100 g)",
+    );
+    await expect(page.getByRole("radio")).toHaveCount(2);
+    await expect(page.getByRole("radio", { name: "Every two weeks" })).toHaveCount(0);
+    await page.getByRole("radio", { name: "Monthly" }).check();
+    await page.getByRole("button", { name: "Subscribe" }).click();
+
+    await expect(page).toHaveURL(/\/subscriptions$/);
+    const chai = page.getByRole("listitem").filter({ hasText: "Rooibos chai (100 g)" });
+    await expect(chai).toContainText("Cederberg Rooibos");
+    await expect(chai).toContainText("Monthly");
+    await expect(chai).toContainText("R 65,50");
+    await expect(chai).toContainText(`Next Delivery due ${johannesburgTomorrow()}`);
+    await expect(page.getByText("12 Long Street, Gardens, Cape Town, 8001")).toBeVisible();
+
+    await page.getByRole("link", { name: "Change your Delivery Address" }).click();
+    await expect(page.getByLabel("Street address")).toHaveValue("12 Long Street");
+    await fillAddress(page, { ...address, street: "40 Bree Street" });
+    await expect(page).toHaveURL(/\/subscriptions$/);
+    await expect(page.getByText("40 Bree Street, Gardens, Cape Town, 8001")).toBeVisible();
+
+    // A second Subscription to the same Product is refused.
+    await page.goto("/?q=chai");
+    await page.getByRole("link", { name: "Subscribe to Rooibos chai (100 g)" }).click();
+    await page.getByRole("radio", { name: "Weekly" }).check();
+    await page.getByRole("button", { name: "Subscribe" }).click();
+    await expect(page.getByRole("alert")).toHaveText(
+      "You already have a Subscription to this Product.",
+    );
+  });
+
+  test("the Vendor is notified of the Subscription and sees it on their Product", async ({
+    page,
+  }) => {
+    await signIn(page, rooibosVendor);
+    await page.getByRole("link", { name: /^Inbox/ }).click();
+    await expect(page.getByRole("listitem").first()).toContainText(
+      `${newCustomer.email} subscribed to Rooibos chai (100 g), delivered monthly.`,
+    );
+
+    await page.goto("/vendor");
+    const chai = page.getByRole("listitem").filter({ hasText: "Rooibos chai (100 g)" });
+    await expect(chai).toContainText("1 active Subscription");
+    await expect(chai).toContainText(newCustomer.email);
   });
 });

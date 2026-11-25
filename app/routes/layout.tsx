@@ -45,6 +45,7 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
           <span className="flex-1" />
           {account ? (
             <>
+              {account.kind === "customer" && <Link to="/subscriptions">Your Subscriptions</Link>}
               <Link to="/inbox">
                 Inbox
                 {unread > 0 && <span className="font-semibold"> ({unread} unread)</span>}

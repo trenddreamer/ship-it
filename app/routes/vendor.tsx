@@ -1,7 +1,10 @@
 import { Link } from "react-router";
 import { requireAccount } from "~/accounts.server";
+import { ProductSubscriptions } from "~/components/product-subscriptions";
 import { db } from "~/db/client.server";
+import { formatCalendarDate } from "~/modules/calendar";
 import { deliveryScheduleOptions, listVendorProducts } from "~/modules/catalogue";
+import { listVendorSubscriptions } from "~/modules/subscriptions";
 import { findVendor } from "~/modules/vendors";
 import type { Route } from "./+types/vendor";
 
@@ -23,12 +26,29 @@ export async function loader({ request }: Route.LoaderArgs) {
   const vendor = await findVendor(db, account.vendorId);
   if (!vendor) throw new Response("Your Vendor wasn't found.", { status: 404 });
   // A rejected Vendor sees only that it was rejected.
-  if (vendor.approvalStatus === "rejected") return { vendor, products: null };
-  return { vendor, products: await listVendorProducts(db, account.vendorId) };
+  if (vendor.approvalStatus === "rejected") {
+    return { vendor, products: null, subscriptions: {} };
+  }
+  const byProduct = await listVendorSubscriptions(db, account.vendorId);
+  return {
+    vendor,
+    products: await listVendorProducts(db, account.vendorId),
+    subscriptions: Object.fromEntries(
+      byProduct.map((product) => [
+        product.productId,
+        product.subscriptions.map((subscription) => ({
+          id: subscription.id,
+          customerEmail: subscription.customerEmail,
+          schedule: scheduleLabels.get(subscription.deliverySchedule) ?? "",
+          nextDue: formatCalendarDate(subscription.nextDueOn),
+        })),
+      ]),
+    ),
+  };
 }
 
 export default function VendorPage({ loaderData }: Route.ComponentProps) {
-  const { vendor, products } = loaderData;
+  const { vendor, products, subscriptions } = loaderData;
   if (!products) {
     return (
       <main className="mx-auto max-w-3xl p-8">
@@ -67,6 +87,7 @@ export default function VendorPage({ loaderData }: Route.ComponentProps) {
                     Delivered:{" "}
                     {product.deliverySchedules.map((s) => scheduleLabels.get(s)).join(", ")}
                   </p>
+                  <ProductSubscriptions subscriptions={subscriptions[product.id] ?? []} />
                 </div>
                 <p className="shrink-0 text-right">
                   <span className="font-semibold">{product.price}</span>

@@ -32,11 +32,20 @@ type Kinds = typeof kinds;
 /** What a Notification reports, e.g. `"vendor-awaiting-approval"`. */
 export type NotificationKind = keyof Kinds;
 
+/** The details each kind's message needs. */
+type Details = { [K in NotificationKind]: Parameters<Kinds[K]>[0] };
+
 /** A Notification to send: its kind, plus the details that kind's message needs. */
 export type NewNotification = {
-  [K in NotificationKind]: { kind: K } & Parameters<Kinds[K]>[0];
+  [K in NotificationKind]: { kind: K } & Details[K];
 }[NotificationKind];
 
-export function messageFor(notification: NewNotification): string {
-  return kinds[notification.kind](notification);
+// The same functions, typed per kind, so `messageFor` can call the one that
+// matches the Notification's kind (TypeScript's "correlated union" pattern).
+const messages: { [K in NotificationKind]: (details: Details[K]) => string } = kinds;
+
+export function messageFor<K extends NotificationKind>(
+  notification: { kind: K } & Details[K],
+): string {
+  return messages[notification.kind](notification);
 }

@@ -4,6 +4,8 @@ interface TextFieldProps {
   type?: "text" | "email" | "password";
   autoComplete?: string;
   multiline?: boolean;
+  /** What the field starts with, e.g. the value being changed. */
+  defaultValue?: string;
   /** The field's errors from the action, shown under it. */
   errors?: string[];
 }
@@ -15,6 +17,7 @@ export function TextField({
   type = "text",
   autoComplete,
   multiline,
+  defaultValue,
   errors,
 }: TextFieldProps) {
   const errorId = `${name}-errors`;
@@ -22,6 +25,7 @@ export function TextField({
     id: name,
     name,
     required: true,
+    defaultValue,
     "aria-invalid": errors?.length ? true : undefined,
     "aria-describedby": errors?.length ? errorId : undefined,
     className: "mt-1 block w-full rounded border border-gray-300 px-3 py-2",

@@ -11,24 +11,40 @@
 //
 // - Admin: the first Admin from configuration, by default
 //   admin@ship-it.test / admin-password (see app/config.server.ts).
-// - Customer: customer@ship-it.test / customer-password.
+// - Customer: customer@ship-it.test / customer-password, with a Delivery
+//   Address and three Subscriptions (`demoSubscriptions`).
 // - Vendors: each seeded Vendor's `email` below / vendor-password.
 import { sql } from "drizzle-orm";
 import { config } from "~/config.server";
 import {
   ensureFirstAdmin,
+  setDeliveryAddress,
   signUpCustomer,
   signUpVendor,
   type Account,
   type SignUpResult,
 } from "~/modules/accounts";
 import { addProduct, type NewProduct } from "~/modules/catalogue";
+import { subscribe } from "~/modules/subscriptions";
+import { today } from "~/today.server";
 import { databaseLocation, db, type DB } from "./client.server";
 import { decideVendor } from "~/modules/vendors";
-import { type VendorApprovalStatus } from "./schema";
+import { type DeliverySchedule, type VendorApprovalStatus } from "./schema";
 
 const demoCustomer = { email: "customer@ship-it.test", password: "customer-password" };
 const demoVendorPassword = "vendor-password";
+const demoCustomerAddress = {
+  street: "27 Kloof Street",
+  suburb: "Gardens",
+  city: "Cape Town",
+  postalCode: "8001",
+};
+/** The demo Customer's Subscriptions, to seeded Products of approved Vendors. */
+const demoSubscriptions: { productName: string; deliverySchedule: DeliverySchedule }[] = [
+  { productName: "Free-range eggs (30)", deliverySchedule: "weekly" },
+  { productName: "Karoo lamb box", deliverySchedule: "monthly" },
+  { productName: "House espresso blend (500 g)", deliverySchedule: "every-two-weeks" },
+];
 
 interface SeedVendor {
   /** The email of the Vendor's demo Account. */
@@ -149,7 +165,8 @@ export async function seed(database: DB): Promise<void> {
   // are hashed the same way. That isn't one transaction: if the seed fails
   // part-way, run `npm run db:reset`.
   await ensureFirstAdmin(database, config.firstAdmin);
-  await signedUp(signUpCustomer(database, demoCustomer));
+  const customer = await signedUp(signUpCustomer(database, demoCustomer));
+  const productIds = new Map<string, number>();
   for (const vendor of seedVendors) {
     const account = await signedUp(
       signUpVendor(database, {
@@ -169,7 +186,17 @@ export async function seed(database: DB): Promise<void> {
       });
       if (!decided.ok) throw new Error(`Deciding ${vendor.name} failed: ${decided.error}`);
     }
-    for (const product of vendor.products) await addProduct(database, id, product);
+    for (const product of vendor.products) {
+      productIds.set(product.name, (await addProduct(database, id, product)).id);
+    }
+  }
+  await setDeliveryAddress(database, customer.id, demoCustomerAddress);
+  // Subscribed today, so each first Delivery is due tomorrow.
+  for (const { productName, deliverySchedule } of demoSubscriptions) {
+    const productId = productIds.get(productName);
+    if (productId === undefined) throw new Error(`No seeded Product is called ${productName}`);
+    const result = await subscribe(database, customer.id, { productId, deliverySchedule }, today());
+    if (!result.ok) throw new Error(`Subscribing to ${productName} failed: ${result.error}`);
   }
 }
 
