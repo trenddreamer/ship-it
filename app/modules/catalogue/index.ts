@@ -6,3 +6,4 @@ export {
   type CatalogueProduct,
   type NewProduct,
 } from "./lib/products";
+export { deliveryScheduleOptions, newProductSchema } from "./lib/new-product-schema";
