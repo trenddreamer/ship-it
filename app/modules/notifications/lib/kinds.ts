@@ -14,6 +14,17 @@ const kinds = {
   /** To a Vendor, when an Admin rejects it. */
   "vendor-rejected": ({ vendorName }: { vendorName: string }) =>
     `An Admin rejected ${vendorName}. Customers can't see it, and it can't apply again.`,
+  /** To a Vendor, when a Customer subscribes to one of its Products. */
+  "new-subscription": ({
+    customerEmail,
+    productName,
+    scheduleLabel,
+  }: {
+    customerEmail: string;
+    productName: string;
+    /** The Delivery Schedule as shown to people, e.g. "Every two weeks". */
+    scheduleLabel: string;
+  }) => `${customerEmail} subscribed to ${productName}, delivered ${scheduleLabel.toLowerCase()}.`,
 };
 
 type Kinds = typeof kinds;

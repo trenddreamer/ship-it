@@ -1,7 +1,9 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { subscriptions, type DeliverySchedule } from "~/db/schema";
-import { findDeliveryAddress } from "~/modules/accounts";
+import { accounts, subscriptions, type DeliverySchedule } from "~/db/schema";
+import { findAccount, findDeliveryAddress } from "~/modules/accounts";
 import { addDays, type CalendarDate } from "~/modules/calendar";
+import { deliveryScheduleOptions } from "~/modules/catalogue";
+import { sendNotification } from "~/modules/notifications";
 import type { MarketplaceDatabase } from "~/modules/vendors";
 import { findSubscribableProduct } from "./subscribable-product";
 
@@ -17,12 +19,15 @@ export type SubscribeResult = { ok: true } | { ok: false; error: SubscribeRefusa
 export type SubscribeRefusal =
   "no-delivery-address" | "product-not-found" | "schedule-not-offered" | "already-subscribed";
 
+const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
+
 /**
  * Subscribes a Customer to a Product on one of its Delivery Schedules. The
  * first Delivery is due the day after `today`. Refused, creating nothing,
  * when the Customer has no Delivery Address, when Customers can't see the
  * Product, when it doesn't offer the Delivery Schedule, or when the Customer
- * already has an active Subscription to it.
+ * already has an active Subscription to it. The Vendor is notified in the
+ * same transaction.
  */
 export async function subscribe(
   database: MarketplaceDatabase,
@@ -41,17 +46,34 @@ export async function subscribe(
   if (await hasActiveSubscription(database, customerId, product.id)) {
     return { ok: false, error: "already-subscribed" };
   }
-  await database
-    .insert(subscriptions)
-    .values({
-      accountId: customerId,
-      productId: pick.productId,
-      deliverySchedule: pick.deliverySchedule,
-      subscribedOn: today,
-      scheduleStartsOn: today,
-      nextDueOn: addDays(today, 1),
-    })
-    .run();
+  const customer = await findAccount(database, customerId);
+  await database.transaction(async (tx) => {
+    await tx
+      .insert(subscriptions)
+      .values({
+        accountId: customerId,
+        productId: product.id,
+        deliverySchedule: pick.deliverySchedule,
+        subscribedOn: today,
+        scheduleStartsOn: today,
+        nextDueOn: addDays(today, 1),
+      })
+      .run();
+    const vendorAccounts = await tx
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(eq(accounts.vendorId, product.vendorId))
+      .all();
+    for (const vendorAccount of vendorAccounts) {
+      await sendNotification(tx, vendorAccount.id, {
+        kind: "new-subscription",
+        // A Customer who has a Delivery Address has an Account.
+        customerEmail: customer!.email,
+        productName: product.name,
+        scheduleLabel: scheduleLabels.get(pick.deliverySchedule)!,
+      });
+    }
+  });
   return { ok: true };
 }
 

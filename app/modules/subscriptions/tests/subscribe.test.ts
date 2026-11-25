@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { countUnread, openInbox } from "~/modules/notifications";
 import { findSubscribableProduct, listCustomerSubscriptions, subscribe } from "../index";
 import { addCustomer, addVendor, addVendorProduct, freshDatabase } from "./database";
 
@@ -136,5 +137,28 @@ describe("subscribing", () => {
     expect(await listCustomerSubscriptions(database, sipho)).toMatchObject([
       { productName: "Free-range eggs" },
     ]);
+  });
+
+  it("tells the Vendor about each new Subscription, and nobody about a refused one", async () => {
+    const database = await freshDatabase();
+    const karoo = await addVendor(database, "Karoo Farm");
+    const other = await addVendor(database, "Cape Coffee");
+    const eggs = await addVendorProduct(database, karoo.vendorId, "Free-range eggs", {
+      deliverySchedules: ["every-two-weeks"],
+    });
+    const thandi = await addCustomer(database, "thandi@example.test");
+    const pick = { productId: eggs, deliverySchedule: "every-two-weeks" } as const;
+    // Signing up and approval left Notifications in the Vendors' Inboxes; clear them.
+    await openInbox(database, karoo.accountId);
+    await openInbox(database, other.accountId);
+
+    await subscribe(database, thandi, pick, today);
+    await subscribe(database, thandi, pick, today);
+
+    expect((await openInbox(database, karoo.accountId)).map((n) => [n.message, n.unread])).toEqual([
+      ["thandi@example.test subscribed to Free-range eggs, delivered every two weeks.", true],
+    ]);
+    expect(await countUnread(database, other.accountId)).toBe(0);
+    expect(await countUnread(database, thandi)).toBe(0);
   });
 });
