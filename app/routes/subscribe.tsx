@@ -4,7 +4,7 @@ import { requireAccount } from "~/accounts.server";
 import { FormError } from "~/components/text-field";
 import { db } from "~/db/client.server";
 import { findDeliveryAddress } from "~/modules/accounts";
-import { deliveryScheduleOptions } from "~/modules/catalogue";
+import { deliveryScheduleOptions } from "~/modules/deliveries";
 import {
   findSubscribableProduct,
   subscribe,

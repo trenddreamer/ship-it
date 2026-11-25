@@ -1,19 +1,7 @@
 import { z } from "zod";
-import { deliverySchedules, type DeliverySchedule } from "~/db/schema";
+import { deliverySchedules } from "~/db/schema";
 import { priceInputSchema } from "~/modules/price";
 import type { NewProduct } from "./products";
-
-const labels: Record<DeliverySchedule, string> = {
-  weekly: "Weekly",
-  "every-two-weeks": "Every two weeks",
-  monthly: "Monthly",
-};
-
-/** Each Delivery Schedule a Vendor can offer, in order, with its name for a form. */
-export const deliveryScheduleOptions = deliverySchedules.map((value) => ({
-  value,
-  label: labels[value],
-}));
 
 const deliverySchedule = z.enum(deliverySchedules, {
   error: "Pick from weekly, every two weeks or monthly.",
