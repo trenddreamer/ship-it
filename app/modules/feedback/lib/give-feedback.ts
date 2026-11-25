@@ -56,8 +56,8 @@ export async function giveFeedback(
   try {
     await database.insert(feedback).values({ accountId: input.account.id });
   } catch (error) {
-    const issue = issueUrl === undefined ? "" : ` (issue: ${issueUrl})`;
-    console.error(`Feedback was sent but couldn't be recorded${issue}:`, withoutParams(error));
+    const issueNote = issueUrl === undefined ? "" : ` (issue: ${issueUrl})`;
+    console.error(`Feedback was sent but couldn't be recorded${issueNote}:`, withoutParams(error));
   }
   return issueUrl === undefined ? { kind: "sent" } : { kind: "sent", issueUrl };
 }
