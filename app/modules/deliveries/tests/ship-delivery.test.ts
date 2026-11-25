@@ -54,4 +54,18 @@ describe("shipping a Delivery", () => {
     expect(await listVendorDueDeliveries(database, karoo)).toMatchObject([{ id: delivery.id }]);
     expect(await listCustomerCharges(database, thandi)).toEqual([]);
   });
+
+  it("refuses a second attempt, which charges nothing more", async () => {
+    const { database, karoo, thandi, delivery } = await karooWithDueEggs();
+    await shipDelivery(database, karoo, delivery.id, "2026-11-04");
+
+    expect(await shipDelivery(database, karoo, delivery.id, "2026-11-05")).toEqual({
+      ok: false,
+      error: "already-shipped",
+    });
+
+    expect(await listCustomerCharges(database, thandi)).toMatchObject([
+      { chargedOn: "2026-11-04" },
+    ]);
+  });
 });
