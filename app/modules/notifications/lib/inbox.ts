@@ -64,11 +64,15 @@ export async function openInbox(
     .orderBy(desc(notifications.id))
     .all();
   // Only the ones listed: one sent since the select stays unread.
-  const unreadIds = rows.filter((row) => !row.read).map((row) => row.id);
   await database
     .update(notifications)
     .set({ read: true })
-    .where(inArray(notifications.id, unreadIds))
+    .where(
+      inArray(
+        notifications.id,
+        rows.map((row) => row.id),
+      ),
+    )
     .run();
   return rows.map((row) => ({
     id: row.id,
