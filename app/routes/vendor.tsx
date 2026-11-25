@@ -12,7 +12,8 @@ export function meta(_: Route.MetaArgs) {
 const approvalMessages = {
   pending: "Pending: an Admin hasn't approved your business yet, so Customers can't see it.",
   approved: "Approved: Customers can see your business and its Products.",
-  rejected: "Rejected: an Admin turned your business down, so Customers can't see it.",
+  rejected:
+    "Rejected: an Admin turned your business down, so Customers can't see it, and it can't apply again.",
 } as const;
 
 const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
@@ -21,11 +22,21 @@ export async function loader({ request }: Route.LoaderArgs) {
   const account = await requireAccount(request, "vendor");
   const vendor = await findVendor(db, account.vendorId);
   if (!vendor) throw new Response("Your Vendor wasn't found.", { status: 404 });
+  // A rejected Vendor sees only that it was rejected.
+  if (vendor.approvalStatus === "rejected") return { vendor, products: null };
   return { vendor, products: await listVendorProducts(db, account.vendorId) };
 }
 
 export default function VendorPage({ loaderData }: Route.ComponentProps) {
   const { vendor, products } = loaderData;
+  if (!products) {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        <h1 className="text-3xl font-semibold">{vendor.name}</h1>
+        <p className="mt-6 rounded border border-gray-200 p-4">{approvalMessages.rejected}</p>
+      </main>
+    );
+  }
   return (
     <main className="mx-auto max-w-3xl p-8">
       <h1 className="text-3xl font-semibold">{vendor.name}</h1>

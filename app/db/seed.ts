@@ -13,7 +13,7 @@
 //   admin@ship-it.test / admin-password (see app/config.server.ts).
 // - Customer: customer@ship-it.test / customer-password.
 // - Vendors: each seeded Vendor's `email` below / vendor-password.
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { config } from "~/config.server";
 import {
   ensureFirstAdmin,
@@ -24,7 +24,8 @@ import {
 } from "~/modules/accounts";
 import { addProduct, type NewProduct } from "~/modules/catalogue";
 import { databaseLocation, db, type DB } from "./client.server";
-import { vendors, type VendorApprovalStatus } from "./schema";
+import { decideVendor } from "~/modules/vendors";
+import { type VendorApprovalStatus } from "./schema";
 
 const demoCustomer = { email: "customer@ship-it.test", password: "customer-password" };
 const demoVendorPassword = "vendor-password";
@@ -160,11 +161,14 @@ export async function seed(database: DB): Promise<void> {
     );
     if (account.kind !== "vendor") throw new Error(`${vendor.email} isn't a Vendor Account`);
     const id = account.vendorId;
-    await database
-      .update(vendors)
-      .set({ approvalStatus: vendor.approvalStatus })
-      .where(eq(vendors.id, id))
-      .run();
+    // Decided the way an Admin decides, so the Vendor is told in its Inbox.
+    if (vendor.approvalStatus !== "pending") {
+      const decided = await decideVendor(database, {
+        vendorId: id,
+        decision: vendor.approvalStatus,
+      });
+      if (!decided.ok) throw new Error(`Deciding ${vendor.name} failed: ${decided.error}`);
+    }
     for (const product of vendor.products) await addProduct(database, id, product);
   }
 }
