@@ -36,6 +36,8 @@ const env: NodeJS.ProcessEnv = {
   ...process.env,
   JOURNEY_PORT: port,
   DATABASE_PATH: join(databaseDir, "marketplace.db"),
+  // The daily job's secret, for the server and for runDueDeliveriesJob (e2e/helpers.ts).
+  CRON_SECRET: "journey-cron-secret",
 };
 // Always a local file: never let the journey touch Turso.
 delete env.TURSO_DATABASE_URL;

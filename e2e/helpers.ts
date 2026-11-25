@@ -1,7 +1,7 @@
 // Helpers and fixtures for the journey (e2e/journey.test.ts): the demo
 // Accounts, and the steps a person repeats through the browser. Browser only:
 // never import from `app/`.
-import { expect, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 /** The card of a Vendor on the home page. */
 export function vendorCard(page: Page, name: string) {
@@ -57,6 +57,29 @@ export function johannesburgDay(offset: number) {
     year: "numeric",
     timeZone: "Africa/Johannesburg",
   }).format(new Date(Date.now() + offset * 24 * 60 * 60 * 1000));
+}
+
+/** The day `offset` days from today in Johannesburg, as "YYYY-MM-DD". */
+export function johannesburgIsoDay(offset: number) {
+  // en-CA formats dates as YYYY-MM-DD.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(
+    new Date(Date.now() + offset * 24 * 60 * 60 * 1000),
+  );
+}
+
+/**
+ * Runs the daily job that makes Deliveries fall due, as if `today` (a
+ * "YYYY-MM-DD") were today: the journey's only way to move time forward.
+ * Sends the secret e2e/run.ts gives the server. Returns the response.
+ */
+export async function runDueDeliveriesJob(
+  request: APIRequestContext,
+  today: string,
+  { secret = process.env.CRON_SECRET } = {},
+) {
+  return request.get(`/jobs/create-due-deliveries?today=${today}`, {
+    headers: secret ? { authorization: `Bearer ${secret}` } : {},
+  });
 }
 
 /** Adds a Product from the Vendor page through the new-Product form. */

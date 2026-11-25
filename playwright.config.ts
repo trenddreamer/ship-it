@@ -24,7 +24,9 @@ export default defineConfig({
   webServer: {
     command: "npm run start",
     url: baseURL,
-    env: { PORT: port, HOST: "127.0.0.1" },
+    // ACCEPT_JOB_TODAY: the production build takes the job's `?today=`, so the
+    // journey can move time forward (app/config.server.ts).
+    env: { PORT: port, HOST: "127.0.0.1", ACCEPT_JOB_TODAY: "true" },
     reuseExistingServer: false,
     timeout: 60_000,
   },

@@ -12,9 +12,11 @@ import {
   demo,
   fillAddress,
   johannesburgDay,
+  johannesburgIsoDay,
   johannesburgTomorrow,
   newCustomer,
   rooibosVendor,
+  runDueDeliveriesJob,
   signIn,
   signOut,
   vendorCard,
@@ -378,5 +380,19 @@ test.describe.serial("Marketplace journey", () => {
     await expect(page.getByRole("listitem").first()).toContainText(
       `${demo.customer.email} subscribed to House espresso blend (500 g), delivered monthly.`,
     );
+  });
+
+  test("the next day the Delivery falls due, and the Vendor sees it", async ({ page, request }) => {
+    const tomorrow = johannesburgIsoDay(1);
+    expect((await runDueDeliveriesJob(request, tomorrow, { secret: "" })).status()).toBe(401);
+    expect((await runDueDeliveriesJob(request, tomorrow)).ok()).toBe(true);
+
+    await signIn(page, rooibosVendor);
+    const due = page.getByRole("region", { name: "Deliveries due" }).getByRole("listitem");
+    await expect(due).toHaveCount(1);
+    await expect(due).toContainText("Rooibos chai (100 g)");
+    await expect(due).toContainText(`Due ${johannesburgTomorrow()}`);
+    await expect(due).toContainText(`To ${newCustomer.email}, 40 Bree Street, Gardens, Cape Town`);
+    await expect(due).toContainText("R 65,50");
   });
 });

@@ -1,9 +1,11 @@
 import { Link } from "react-router";
 import { requireAccount } from "~/accounts.server";
+import { DueDeliveries } from "~/components/due-deliveries";
 import { ProductSubscriptions } from "~/components/product-subscriptions";
 import { db } from "~/db/client.server";
 import { formatCalendarDate } from "~/modules/calendar";
 import { deliveryScheduleOptions, listVendorProducts } from "~/modules/catalogue";
+import { listVendorDueDeliveries } from "~/modules/deliveries";
 import { listVendorSubscriptions } from "~/modules/subscriptions";
 import { findVendor } from "~/modules/vendors";
 import type { Route } from "./+types/vendor";
@@ -27,11 +29,16 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!vendor) throw new Response("Your Vendor wasn't found.", { status: 404 });
   // A rejected Vendor sees only that it was rejected.
   if (vendor.approvalStatus === "rejected") {
-    return { vendor, products: null, subscriptions: {} };
+    return { vendor, products: null, subscriptions: {}, dueDeliveries: [] };
   }
   const byProduct = await listVendorSubscriptions(db, account.vendorId);
+  const due = await listVendorDueDeliveries(db, account.vendorId);
   return {
     vendor,
+    dueDeliveries: due.map((delivery) => ({
+      ...delivery,
+      dueOn: formatCalendarDate(delivery.dueOn),
+    })),
     products: await listVendorProducts(db, account.vendorId),
     subscriptions: Object.fromEntries(
       byProduct.map((product) => [
@@ -48,7 +55,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function VendorPage({ loaderData }: Route.ComponentProps) {
-  const { vendor, products, subscriptions } = loaderData;
+  const { vendor, products, subscriptions, dueDeliveries } = loaderData;
   if (!products) {
     return (
       <main className="mx-auto max-w-3xl p-8">
@@ -98,6 +105,8 @@ export default function VendorPage({ loaderData }: Route.ComponentProps) {
           </ul>
         )}
       </section>
+
+      <DueDeliveries deliveries={dueDeliveries} />
     </main>
   );
 }
