@@ -4,7 +4,8 @@
 // To change it: edit this file, run `npm run db:generate` to write a
 // migration into app/db/migrations/, then `npm run db:migrate`. Commit the
 // schema change and its migration together.
-import { sqliteTable, integer, text, index } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const vendorApprovalStatuses = ["pending", "approved", "rejected"] as const;
 export type VendorApprovalStatus = (typeof vendorApprovalStatuses)[number];
@@ -32,4 +33,31 @@ export const products = sqliteTable(
     priceCents: integer("price_cents").notNull(),
   },
   (table) => [index("products_vendor_id_idx").on(table.vendorId)],
+);
+
+export const accountKinds = ["customer", "vendor", "admin"] as const;
+export type AccountKind = (typeof accountKinds)[number];
+
+/**
+ * How a person signs in: an email and a password, stored only as a scrypt
+ * hash. Each Account is exactly one kind. A Vendor Account points at its
+ * Vendor; no other kind has one.
+ */
+export const accounts = sqliteTable(
+  "accounts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    email: text("email").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    kind: text("kind", { enum: accountKinds }).notNull(),
+    vendorId: integer("vendor_id").references(() => vendors.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("accounts_email_idx").on(table.email),
+    uniqueIndex("accounts_vendor_id_idx").on(table.vendorId),
+    check(
+      "accounts_vendor_kind",
+      sql`(${table.kind} = 'vendor') = (${table.vendorId} is not null)`,
+    ),
+  ],
 );
