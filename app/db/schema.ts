@@ -43,6 +43,27 @@ export const products = sqliteTable(
   (table) => [index("products_vendor_id_idx").on(table.vendorId)],
 );
 
+/**
+ * A Product's Price history: one row per Price it has had, the first when it
+ * was added, then one per change. Rows are in history order by `id`, which
+ * also orders changes made on the same day. `products.price_cents` is the
+ * latest row's Price.
+ */
+export const priceChanges = sqliteTable(
+  "price_changes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    /** The Price from this change on, in whole cents. */
+    priceCents: integer("price_cents").notNull(),
+    /** The day it was made, "YYYY-MM-DD" in Africa/Johannesburg. */
+    changedOn: text("changed_on").notNull(),
+  },
+  (table) => [index("price_changes_product_id_idx").on(table.productId)],
+);
+
 /** How often a Product is delivered under a Subscription. A fixed set. */
 export const deliverySchedules = ["weekly", "every-two-weeks", "monthly"] as const;
 export type DeliverySchedule = (typeof deliverySchedules)[number];
@@ -121,6 +142,14 @@ export const subscriptions = sqliteTable(
     deliverySchedule: text("delivery_schedule", { enum: deliverySchedules }).notNull(),
     /** The day the Customer subscribed (which Price applies depends on it). */
     subscribedOn: text("subscribed_on").notNull(),
+    /**
+     * The Product's latest Price change when the Customer subscribed. It places
+     * subscribing in the Price history, so a change made later the same day
+     * counts as after it.
+     */
+    priceChangeId: integer("price_change_id")
+      .notNull()
+      .references(() => priceChanges.id),
     /** The day the current Delivery Schedule runs from: the day of subscribing or of the last switch. */
     scheduleStartsOn: text("schedule_starts_on").notNull(),
     /** The day the next Delivery falls due. */

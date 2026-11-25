@@ -5,6 +5,7 @@ import { TextField } from "~/components/text-field";
 import { db } from "~/db/client.server";
 import { addProduct, deliveryScheduleOptions, newProductSchema } from "~/modules/catalogue";
 import { findVendor } from "~/modules/vendors";
+import { today } from "~/today.server";
 import type { Route } from "./+types/vendor-products-new";
 
 export function meta(_: Route.MetaArgs) {
@@ -36,7 +37,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (!parsed.success) {
     return data({ fieldErrors: z.flattenError(parsed.error).fieldErrors }, 400);
   }
-  await addProduct(db, account.vendorId, parsed.data);
+  await addProduct(db, account.vendorId, parsed.data, today());
   return redirect("/vendor");
 }
 

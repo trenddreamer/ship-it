@@ -9,13 +9,14 @@ const eggs = {
   priceCents: 15000,
   deliverySchedules: ["weekly", "monthly"],
 } as const;
+const addedOn = "2026-11-01";
 
 describe("addProduct", () => {
   it("adds a Product the Vendor then sees with its Price and Delivery Schedules", async () => {
     const database = await freshDatabase();
     const vendorId = await addVendor(database, "Karoo Farm", "pending");
 
-    const added = await addProduct(database, vendorId, eggs);
+    const added = await addProduct(database, vendorId, eggs, addedOn);
 
     const expected = {
       id: added.id,
@@ -33,10 +34,15 @@ describe("addProduct", () => {
     const database = await freshDatabase();
     const vendorId = await addVendor(database, "Karoo Farm", "approved");
 
-    const added = await addProduct(database, vendorId, {
-      ...eggs,
-      deliverySchedules: ["monthly", "weekly", "every-two-weeks", "monthly"],
-    });
+    const added = await addProduct(
+      database,
+      vendorId,
+      {
+        ...eggs,
+        deliverySchedules: ["monthly", "weekly", "every-two-weeks", "monthly"],
+      },
+      addedOn,
+    );
 
     const all = ["weekly", "every-two-weeks", "monthly"];
     expect(added.deliverySchedules).toEqual(all);
@@ -50,13 +56,18 @@ describe("listVendorProducts", () => {
     const database = await freshDatabase();
     const karoo = await addVendor(database, "Karoo Farm", "approved");
     const coffee = await addVendor(database, "Coffee Roasters", "approved");
-    await addProduct(database, karoo, { ...eggs, name: "Lamb box", priceCents: 52500 });
-    await addProduct(database, coffee, {
-      ...eggs,
-      name: "Espresso blend",
-      deliverySchedules: ["every-two-weeks"],
-    });
-    await addProduct(database, karoo, { ...eggs, deliverySchedules: ["monthly"] });
+    await addProduct(database, karoo, { ...eggs, name: "Lamb box", priceCents: 52500 }, addedOn);
+    await addProduct(
+      database,
+      coffee,
+      {
+        ...eggs,
+        name: "Espresso blend",
+        deliverySchedules: ["every-two-weeks"],
+      },
+      addedOn,
+    );
+    await addProduct(database, karoo, { ...eggs, deliverySchedules: ["monthly"] }, addedOn);
 
     const listed = await listVendorProducts(database, karoo);
 
@@ -82,7 +93,7 @@ describe("what Customers see of an added Product", () => {
     const database = await freshDatabase();
     const karoo = await addVendor(database, "Karoo Farm", "approved");
 
-    await addProduct(database, karoo, eggs);
+    await addProduct(database, karoo, eggs, addedOn);
 
     const [shown] = await listApprovedVendors(database);
     expect(shown?.products.map((p) => [p.name, p.price])).toEqual([
@@ -94,7 +105,7 @@ describe("what Customers see of an added Product", () => {
     const database = await freshDatabase();
     const bakery = await addVendor(database, "Bakery", "pending");
 
-    await addProduct(database, bakery, eggs);
+    await addProduct(database, bakery, eggs, addedOn);
 
     expect(await listApprovedVendors(database)).toEqual([]);
   });

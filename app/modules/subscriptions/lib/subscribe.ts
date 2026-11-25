@@ -1,5 +1,5 @@
-import { and, eq, isNull } from "drizzle-orm";
-import { subscriptions, type DeliverySchedule } from "~/db/schema";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { priceChanges, subscriptions, type DeliverySchedule } from "~/db/schema";
 import { findAccount, findDeliveryAddress } from "~/modules/accounts";
 import { addDays, type CalendarDate } from "~/modules/calendar";
 import { deliveryScheduleOptions } from "~/modules/catalogue";
@@ -48,6 +48,14 @@ export async function subscribe(
   }
   const customer = await findAccount(database, customerId);
   await database.transaction(async (tx) => {
+    // Where subscribing falls in the Price history: after the latest change.
+    const [latest] = await tx
+      .select({ id: priceChanges.id })
+      .from(priceChanges)
+      .where(eq(priceChanges.productId, product.id))
+      .orderBy(desc(priceChanges.id))
+      .limit(1)
+      .all();
     await tx
       .insert(subscriptions)
       .values({
@@ -55,6 +63,8 @@ export async function subscribe(
         productId: product.id,
         deliverySchedule: pick.deliverySchedule,
         subscribedOn: today,
+        // Every Product has a Price history from the day it was added.
+        priceChangeId: latest!.id,
         scheduleStartsOn: today,
         nextDueOn: addDays(today, 1),
       })

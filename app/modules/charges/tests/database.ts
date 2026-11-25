@@ -57,6 +57,9 @@ export async function addVendor(database: MarketplaceDatabase, name: string): Pr
   return vendorId;
 }
 
+/** The day the fixtures add Products: before any day the tests use. */
+const productsAddedOn = "2026-01-01";
+
 /** Adds a Product offering every Delivery Schedule. Returns its id. */
 export async function addVendorProduct(
   database: MarketplaceDatabase,
@@ -64,13 +67,18 @@ export async function addVendorProduct(
   name: string,
   overrides: Partial<NewProduct> = {},
 ): Promise<number> {
-  const product = await addProduct(database, vendorId, {
-    name,
-    description: `${name}, delivered.`,
-    priceCents: 15000,
-    deliverySchedules: ["weekly", "every-two-weeks", "monthly"],
-    ...overrides,
-  });
+  const product = await addProduct(
+    database,
+    vendorId,
+    {
+      name,
+      description: `${name}, delivered.`,
+      priceCents: 15000,
+      deliverySchedules: ["weekly", "every-two-weeks", "monthly"],
+      ...overrides,
+    },
+    productsAddedOn,
+  );
   return product.id;
 }
 

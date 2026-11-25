@@ -187,7 +187,7 @@ export async function seed(database: DB): Promise<void> {
       if (!decided.ok) throw new Error(`Deciding ${vendor.name} failed: ${decided.error}`);
     }
     for (const product of vendor.products) {
-      productIds.set(product.name, (await addProduct(database, id, product)).id);
+      productIds.set(product.name, (await addProduct(database, id, product, today())).id);
     }
   }
   await setDeliveryAddress(database, customer.id, demoCustomerAddress);

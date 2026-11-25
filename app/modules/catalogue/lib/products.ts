@@ -1,10 +1,12 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import {
   deliverySchedules,
+  priceChanges,
   productDeliverySchedules,
   products,
   type DeliverySchedule,
 } from "~/db/schema";
+import type { CalendarDate } from "~/modules/calendar";
 import { formatPrice } from "~/modules/price";
 import type { MarketplaceDatabase } from "~/modules/vendors";
 
@@ -34,11 +36,13 @@ export interface CatalogueProduct {
  * Adds a Product to a Vendor's catalogue, with the Delivery Schedules it
  * offers. Whether the Vendor is approved doesn't matter: Customers only see
  * an approved Vendor's Products, so a pending Vendor's stay hidden until then.
+ * Its Price history starts `today`.
  */
 export async function addProduct(
   database: MarketplaceDatabase,
   vendorId: number,
   product: NewProduct,
+  today: CalendarDate,
 ): Promise<CatalogueProduct> {
   const offered = inScheduleOrder(product.deliverySchedules);
   const id = await database.transaction(async (tx) => {
@@ -55,6 +59,10 @@ export async function addProduct(
     await tx
       .insert(productDeliverySchedules)
       .values(offered.map((deliverySchedule) => ({ productId: row.id, deliverySchedule })))
+      .run();
+    await tx
+      .insert(priceChanges)
+      .values({ productId: row.id, priceCents: product.priceCents, changedOn: today })
       .run();
     return row.id;
   });
