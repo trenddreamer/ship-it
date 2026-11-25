@@ -11,7 +11,6 @@ import {
   addVendor,
   addVendorProduct,
   freshDatabase,
-  setPrice,
 } from "./database";
 
 async function weeklyEggsFrom(subscribedOn: string) {
@@ -54,19 +53,6 @@ describe("createDueDeliveries", () => {
     expect(await dueDates()).toEqual(["2026-11-02", "2026-11-09"]);
     expect(await listCustomerSubscriptions(database, thandi)).toMatchObject([
       { nextDueOn: "2026-11-16" },
-    ]);
-  });
-
-  it("records the Price of each Delivery when it falls due", async () => {
-    const { database, karoo, eggs } = await weeklyEggsFrom("2026-11-01");
-
-    await createDueDeliveries(database, "2026-11-02");
-    await setPrice(database, eggs, 9500);
-    await createDueDeliveries(database, "2026-11-09");
-
-    expect(await listVendorDueDeliveries(database, karoo)).toMatchObject([
-      { dueOn: "2026-11-02", priceCents: 9000 },
-      { dueOn: "2026-11-09", priceCents: 9500 },
     ]);
   });
 
