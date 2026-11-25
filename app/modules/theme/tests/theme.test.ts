@@ -21,6 +21,22 @@ function themeColours(): Map<string, Record<Scheme, string>> {
   return colours;
 }
 
+/** The declarations of theme.css's rule for `selector`, in any order. */
+function declarations(selector: string): Record<string, string> {
+  const rule = themeCss
+    .split("}")
+    .map((block) => block.split("{"))
+    .find(([head = ""]) => head.replace(/\/\*[\s\S]*?\*\//g, "").trim() === selector);
+  if (!rule) throw new Error(`theme.css has no rule for ${selector}`);
+  return Object.fromEntries(
+    (rule[1] ?? "")
+      .split(";")
+      .map((declaration) => declaration.split(":").map((part) => part.trim()))
+      .filter(([property]) => property)
+      .map(([property = "", ...value]) => [property, value.join(":")]),
+  );
+}
+
 /** WCAG 2 relative luminance of a #rrggbb colour. */
 function luminance(hex: string): number {
   const channel = (at: number) => {
@@ -49,7 +65,7 @@ describe("the theme", () => {
   });
 
   it("follows the OS setting for light or dark", () => {
-    expect(themeCss).toMatch(/:root\s*{\s*color-scheme:\s*light dark;/);
+    expect(declarations(":root")).toMatchObject({ "color-scheme": "light dark" });
   });
 
   it("is dark in the dark scheme and light in the light one", () => {
@@ -60,12 +76,14 @@ describe("the theme", () => {
   });
 
   it("gives the page, and a dialog on it, the theme's background and text", () => {
-    expect(themeCss).toMatch(
-      /body\s*{\s*background-color:\s*var\(--color-surface\);\s*color:\s*var\(--color-ink\);/,
-    );
-    expect(themeCss).toMatch(
-      /dialog\s*{\s*background-color:\s*var\(--color-raised\);\s*color:\s*var\(--color-ink\);/,
-    );
+    expect(declarations("body")).toMatchObject({
+      "background-color": "var(--color-surface)",
+      color: "var(--color-ink)",
+    });
+    expect(declarations("dialog")).toMatchObject({
+      "background-color": "var(--color-raised)",
+      color: "var(--color-ink)",
+    });
   });
 
   // Text on a background, as the pages use them. WCAG AA asks for 4.5:1.
