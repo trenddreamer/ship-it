@@ -6,11 +6,31 @@
 // wipe real data. To start again, run `npm run db:reset`.
 //
 // Add seed data here as tables are added to schema.ts.
-import { sql } from "drizzle-orm";
+//
+// Demo Accounts, one of every kind (the journey test signs in with these):
+//
+// - Admin: the first Admin from configuration, by default
+//   admin@ship-it.test / admin-password (see app/config.server.ts).
+// - Customer: customer@ship-it.test / customer-password.
+// - Vendors: each seeded Vendor's `email` below / vendor-password.
+import { eq, sql } from "drizzle-orm";
+import { config } from "~/config.server";
+import {
+  ensureFirstAdmin,
+  signUpCustomer,
+  signUpVendor,
+  type Account,
+  type SignUpResult,
+} from "~/modules/accounts";
 import { databaseLocation, db, type DB } from "./client.server";
 import { products, vendors, type VendorApprovalStatus } from "./schema";
 
+const demoCustomer = { email: "customer@ship-it.test", password: "customer-password" };
+const demoVendorPassword = "vendor-password";
+
 interface SeedVendor {
+  /** The email of the Vendor's demo Account. */
+  email: string;
   name: string;
   description: string;
   approvalStatus: VendorApprovalStatus;
@@ -26,6 +46,7 @@ interface SeedProduct {
 
 const seedVendors: SeedVendor[] = [
   {
+    email: "karoo@ship-it.test",
     name: "Karoo Free-Range Farm",
     description: "Pasture-raised eggs and meat from a family farm outside Graaff-Reinet.",
     approvalStatus: "approved",
@@ -48,6 +69,7 @@ const seedVendors: SeedVendor[] = [
     ],
   },
   {
+    email: "coffee@ship-it.test",
     name: "Cape Town Coffee Roasters",
     description: "Speciality coffee roasted weekly in Woodstock.",
     approvalStatus: "approved",
@@ -65,12 +87,14 @@ const seedVendors: SeedVendor[] = [
     ],
   },
   {
+    email: "spice@ship-it.test",
     name: "Durban Spice Co.",
     description: "Hand-blended masalas and spices from Durban's Grey Street.",
     approvalStatus: "approved",
     products: [],
   },
   {
+    email: "bakery@ship-it.test",
     name: "Joburg Craft Bakery",
     description: "Sourdough and pastries from Maboneng, baked overnight.",
     approvalStatus: "pending",
@@ -79,6 +103,7 @@ const seedVendors: SeedVendor[] = [
     ],
   },
   {
+    email: "honey@ship-it.test",
     name: "Garden Route Honey",
     description: "Raw fynbos honey from hives near Knysna.",
     approvalStatus: "rejected",
@@ -113,25 +138,40 @@ export async function seed(database: DB): Promise<void> {
       `${databaseLocation} already has rows in ${filled.join(", ")}. The seed only fills an empty database. Run \`npm run db:reset\` to start again.`,
     );
   }
-  await database.transaction(async (tx) => {
-    for (const vendor of seedVendors) {
-      const { id } = await tx
-        .insert(vendors)
-        .values({
-          name: vendor.name,
-          description: vendor.description,
-          approvalStatus: vendor.approvalStatus,
-        })
-        .returning({ id: vendors.id })
-        .get();
-      for (const product of vendor.products) {
-        await tx
-          .insert(products)
-          .values({ vendorId: id, ...product })
-          .run();
-      }
+  // Accounts go through the same sign-up as everyone's, so their passwords
+  // are hashed the same way. That isn't one transaction: if the seed fails
+  // part-way, run `npm run db:reset`.
+  await ensureFirstAdmin(database, config.firstAdmin);
+  await signedUp(signUpCustomer(database, demoCustomer));
+  for (const vendor of seedVendors) {
+    const account = await signedUp(
+      signUpVendor(database, {
+        email: vendor.email,
+        password: demoVendorPassword,
+        businessName: vendor.name,
+        description: vendor.description,
+      }),
+    );
+    if (account.kind !== "vendor") throw new Error(`${vendor.email} isn't a Vendor Account`);
+    const id = account.vendorId;
+    await database
+      .update(vendors)
+      .set({ approvalStatus: vendor.approvalStatus })
+      .where(eq(vendors.id, id))
+      .run();
+    for (const product of vendor.products) {
+      await database
+        .insert(products)
+        .values({ vendorId: id, ...product })
+        .run();
     }
-  });
+  }
+}
+
+async function signedUp(result: Promise<SignUpResult>): Promise<Account> {
+  const outcome = await result;
+  if (!outcome.ok) throw new Error(`Seeding an Account failed: ${outcome.error}`);
+  return outcome.account;
 }
 
 await seed(db);
