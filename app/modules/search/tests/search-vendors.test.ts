@@ -61,6 +61,16 @@ describe("searchVendors", () => {
     expect(await names("eggs lamb honey")).toEqual([]);
   });
 
+  it("matches a word within one name or description, never across two", async () => {
+    const database = await freshDatabase();
+    const farm = await addVendor(database, "Karoo", "approved", "Farm");
+    await addProduct(database, farm, "Eggs", 6500, "Tray");
+
+    expect(await searchVendors(database, "karoofarm")).toEqual([]);
+    expect(await searchVendors(database, "farmeggs")).toEqual([]);
+    expect(await searchVendors(database, "eggstray")).toEqual([]);
+  });
+
   it("groups results by Vendor, each with all its Products and their Prices", async () => {
     const database = await freshDatabase();
     const farm = await addVendor(database, "Karoo Farm", "approved", "Family farm.");

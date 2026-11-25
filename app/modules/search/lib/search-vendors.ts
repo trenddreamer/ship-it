@@ -15,7 +15,8 @@ type ShownVendor = Awaited<ReturnType<typeof listApprovedVendors>>[number];
  * is never found here either.
  */
 export async function searchVendors(database: MarketplaceDatabase, query: string) {
-  const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  // Extra whitespace gives empty words, which match anything.
+  const words = query.toLocaleLowerCase().split(/\s/);
   const vendors = await listApprovedVendors(database);
   return vendors.filter((vendor) => {
     const text = searchableText(vendor);
@@ -25,8 +26,11 @@ export async function searchVendors(database: MarketplaceDatabase, query: string
 
 /** Everything a query can match in a Vendor, lower-cased. */
 function searchableText(vendor: ShownVendor): string {
-  return [vendor, ...vendor.products]
-    .flatMap((shown) => [shown.name, shown.description])
-    .join("\n")
-    .toLocaleLowerCase();
+  return (
+    [vendor, ...vendor.products]
+      .flatMap((shown) => [shown.name, shown.description])
+      // No word holds whitespace, so none can match across two of these.
+      .join("\n")
+      .toLocaleLowerCase()
+  );
 }
