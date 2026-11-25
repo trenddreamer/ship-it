@@ -22,6 +22,10 @@ _Avoid_: Small change, trivial change, safe change
 A change that is costly or risky to reverse. A human decides whether it merges.
 _Avoid_: Big change, risky change, breaking change
 
+**Feedback**:
+What someone signed in to the Marketplace tells the Factory about it, in their own words. The Factory explores every piece of Feedback as soon as it is given. Feedback goes to the Factory, never to an Admin or a Vendor, and never appears in an Inbox.
+_Avoid_: Bug report, suggestion, ticket, support request
+
 ### Selling and subscribing
 
 **Account**:
