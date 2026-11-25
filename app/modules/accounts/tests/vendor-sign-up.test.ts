@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { findVendor, listApprovedVendors } from "~/modules/vendors";
-import { signIn, signUpCustomer, signUpVendor } from "../index";
+import { countUnread, openInbox } from "~/modules/notifications";
+import { ensureFirstAdmin, signIn, signUpCustomer, signUpVendor } from "../index";
 import { freshDatabase } from "./database";
 
 const karoo = {
@@ -42,6 +43,30 @@ describe("signing up as a Vendor", () => {
     expect(
       await signIn(database, { email: "sipho@karoo.example", password: "lambs and eggs" }),
     ).toEqual(signedUp);
+  });
+
+  it("tells every Admin a Vendor is awaiting approval", async () => {
+    const database = await freshDatabase();
+    const adminLogin = { email: "admin@example.test", password: "admin password" };
+    await ensureFirstAdmin(database, adminLogin);
+    const admin = await signIn(database, adminLogin);
+    if (!admin.ok) throw new Error("no Admin");
+    const customer = await signUpCustomer(database, {
+      email: "thandi@example.test",
+      password: "a customer",
+    });
+
+    await signUpVendor(database, karoo);
+
+    expect(await openInbox(database, admin.account.id)).toEqual([
+      expect.objectContaining({
+        kind: "vendor-awaiting-approval",
+        message: "Karoo Farm signed up as a Vendor and is awaiting approval.",
+        unread: true,
+      }),
+    ]);
+    if (!customer.ok) throw new Error("no Customer");
+    expect(await countUnread(database, customer.account.id)).toBe(0);
   });
 
   it("refuses a taken email and creates no Vendor", async () => {

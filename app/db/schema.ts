@@ -88,3 +88,23 @@ export const accounts = sqliteTable(
     ),
   ],
 );
+
+/**
+ * A message in one Account's Inbox. Its kind says what it reports (the kinds
+ * live in app/modules/notifications); its message is the text the Inbox shows.
+ * Unread until the Inbox is opened.
+ */
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    message: text("message").notNull(),
+    sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
+    read: integer("read", { mode: "boolean" }).notNull().default(false),
+  },
+  (table) => [index("notifications_account_id_idx").on(table.accountId)],
+);

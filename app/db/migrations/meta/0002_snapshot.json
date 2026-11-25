@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "38c5b793-2524-4ac3-bf89-e68cc69148b6",
+  "id": "1d1145b3-9a11-40ac-8f34-7ebfe450a81b",
   "prevId": "eb3b5b58-a960-4e5b-8b7b-23e04b4a8568",
   "tables": {
     "accounts": {
@@ -83,32 +83,69 @@
         }
       }
     },
-    "product_delivery_schedules": {
-      "name": "product_delivery_schedules",
+    "notifications": {
+      "name": "notifications",
       "columns": {
-        "product_id": {
-          "name": "product_id",
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "account_id": {
+          "name": "account_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "delivery_schedule": {
-          "name": "delivery_schedule",
+        "kind": {
+          "name": "kind",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sent_at": {
+          "name": "sent_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "read": {
+          "name": "read",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "notifications_account_id_idx": {
+          "name": "notifications_account_id_idx",
+          "columns": [
+            "account_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
-        "product_delivery_schedules_product_id_products_id_fk": {
-          "name": "product_delivery_schedules_product_id_products_id_fk",
-          "tableFrom": "product_delivery_schedules",
-          "tableTo": "products",
+        "notifications_account_id_accounts_id_fk": {
+          "name": "notifications_account_id_accounts_id_fk",
+          "tableFrom": "notifications",
+          "tableTo": "accounts",
           "columnsFrom": [
-            "product_id"
+            "account_id"
           ],
           "columnsTo": [
             "id"
@@ -117,15 +154,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "product_delivery_schedules_product_id_delivery_schedule_pk": {
-          "columns": [
-            "product_id",
-            "delivery_schedule"
-          ],
-          "name": "product_delivery_schedules_product_id_delivery_schedule_pk"
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     },

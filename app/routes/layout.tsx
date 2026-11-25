@@ -1,21 +1,40 @@
-import { Form, Link, Outlet } from "react-router";
+import { Form, Link, Outlet, useMatches } from "react-router";
 import { currentAccount } from "~/accounts.server";
+import { db } from "~/db/client.server";
 import { landingPath } from "~/modules/accounts/server";
+import { countUnread } from "~/modules/notifications";
 import type { Route } from "./+types/layout";
 
-// The layout every page sits in: a header with who is signed in. Add things
-// every signed-in page shows (e.g. the Inbox's unread count) to this loader.
+// The layout every page sits in: a header with who is signed in and their
+// Inbox's unread count. Add things every signed-in page shows to this loader.
 export async function loader({ request }: Route.LoaderArgs) {
   const account = await currentAccount(request);
   return {
-    account: account && { email: account.email, kind: account.kind, home: landingPath(account) },
+    account: account && {
+      email: account.email,
+      kind: account.kind,
+      home: landingPath(account),
+      unread: await countUnread(db, account.id),
+    },
   };
+}
+
+// The unread count changes without the URL changing (a Notification arrives,
+// the Inbox is opened), so recount on every navigation, not only when params
+// change.
+export function shouldRevalidate() {
+  return true;
 }
 
 const kindNames = { customer: "Customer", vendor: "Vendor", admin: "Admin" } as const;
 
 export default function Layout({ loaderData }: Route.ComponentProps) {
   const { account } = loaderData;
+  // Opening the Inbox marks everything in it read, but this loader runs
+  // alongside the Inbox's, so it may have counted first. On the Inbox,
+  // nothing is unread.
+  const inInbox = useMatches().some((match) => match.id === "routes/inbox");
+  const unread = account && !inInbox ? account.unread : 0;
   return (
     <>
       <header className="border-b border-gray-200">
@@ -26,6 +45,10 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
           <span className="flex-1" />
           {account ? (
             <>
+              <Link to="/inbox">
+                Inbox
+                {unread > 0 && <span className="font-semibold"> ({unread} unread)</span>}
+              </Link>
               <Link to={account.home}>
                 {account.email} ({kindNames[account.kind]})
               </Link>
