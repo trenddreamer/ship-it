@@ -5,7 +5,15 @@
 // migration into app/db/migrations/, then `npm run db:migrate`. Commit the
 // schema change and its migration together.
 import { sql } from "drizzle-orm";
-import { check, index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const vendorApprovalStatuses = ["pending", "approved", "rejected"] as const;
 export type VendorApprovalStatus = (typeof vendorApprovalStatuses)[number];
@@ -33,6 +41,25 @@ export const products = sqliteTable(
     priceCents: integer("price_cents").notNull(),
   },
   (table) => [index("products_vendor_id_idx").on(table.vendorId)],
+);
+
+/** How often a Product is delivered under a Subscription. A fixed set. */
+export const deliverySchedules = ["weekly", "every-two-weeks", "monthly"] as const;
+export type DeliverySchedule = (typeof deliverySchedules)[number];
+
+/**
+ * A Delivery Schedule a Product offers: one row per schedule, and a Product
+ * offers at least one (the catalogue module enforces that when it adds one).
+ */
+export const productDeliverySchedules = sqliteTable(
+  "product_delivery_schedules",
+  {
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    deliverySchedule: text("delivery_schedule", { enum: deliverySchedules }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.productId, table.deliverySchedule] })],
 );
 
 export const accountKinds = ["customer", "vendor", "admin"] as const;

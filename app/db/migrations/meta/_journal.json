@@ -15,6 +15,13 @@
       "when": 1795591274995,
       "tag": "0001_overconfident_rumiko_fujikawa",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1795592239653,
+      "tag": "0002_premium_tyrannus",
+      "breakpoints": true
     }
   ]
 }
