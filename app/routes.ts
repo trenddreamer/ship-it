@@ -11,6 +11,7 @@ export default [
     route("vendor/products/new", "routes/vendor-products-new.tsx"),
     route("vendor/products/:productId/stop", "routes/vendor-products-stop.tsx"),
     route("vendor/products/:productId/price", "routes/vendor-products-price.tsx"),
+    route("vendor/products/:productId/schedules", "routes/vendor-products-schedules.ts"),
     route("admin", "routes/admin.tsx"),
     route("inbox", "routes/inbox.tsx"),
     route("delivery-address", "routes/delivery-address.tsx"),

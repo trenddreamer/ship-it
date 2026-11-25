@@ -3,6 +3,7 @@ import { requireAccount, requireActingVendor } from "~/accounts.server";
 import { ChargeList } from "~/components/charge-list";
 import { DueDeliveries } from "~/components/due-deliveries";
 import { ProductSubscriptions } from "~/components/product-subscriptions";
+import { OfferScheduleForm } from "~/components/offer-schedule-form";
 import { StopLinks } from "~/components/stop-links";
 import { db } from "~/db/client.server";
 import { formatCalendarDate } from "~/modules/calendar";
@@ -126,6 +127,7 @@ export default function VendorPage({ loaderData, actionData }: Route.ComponentPr
                     {product.deliverySchedules.map((s) => deliveryScheduleLabel(s)).join(", ")}
                   </p>
                   <ProductSubscriptions subscriptions={subscriptions[product.id] ?? []} />
+                  <OfferScheduleForm product={product} />
                   <StopLinks product={product} />
                 </div>
                 <p className="shrink-0 text-right">
