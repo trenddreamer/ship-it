@@ -47,6 +47,24 @@ const kinds = {
     /** The Charge's amount, formatted with `formatPrice`. */
     amount: string;
   }) => `${vendorName} shipped your ${productName}, due ${dueOn}. You were charged ${amount}.`,
+  /** To a Customer subscribed to a Product, when its Vendor changes its Price. */
+  "price-changed": ({
+    vendorName,
+    productName,
+    oldPrice,
+    newPrice,
+    takesEffectOn,
+  }: {
+    vendorName: string;
+    productName: string;
+    /** The Prices, formatted with `formatPrice`. */
+    oldPrice: string;
+    newPrice: string;
+    /** The first day Deliveries fall due at the new Price, e.g. "17 November 2026". */
+    takesEffectOn: string;
+  }) =>
+    `${vendorName} changed the Price of ${productName} from ${oldPrice} to ${newPrice}. ` +
+    `The new Price takes effect on ${takesEffectOn}.`,
 };
 
 type Kinds = typeof kinds;
