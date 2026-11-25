@@ -16,10 +16,11 @@ name: Agent — Implement A Spec
 #     a reviewer can check. Nothing is built. The output is tickets.
 #
 #   LOOP TWO — CHAIN.  Runs once per ticket. Take the frontier ticket — the
-#     lowest open position whose dependencies are all closed — build it, open
+#     lowest open position whose dependencies are all merged — build it, open
 #     a draft PR, then start this workflow again. Finishing one ticket is what
 #     triggers the next. That is the chain, and it is four lines at the bottom
-#     of this file.
+#     of this file. A ticket that depends on an unmerged PR waits: the chain
+#     stops, and the cron picks the queue up after the merge.
 #
 # THE SHAPE, AS A PICTURE
 #
@@ -197,6 +198,12 @@ jobs:
           # 3. The frontier. The lowest open position whose `Depends on:`
           #    positions are all closed. Ticket bodies carry both lines,
           #    written by the decompose loop.
+          #
+          #    Closed means merged. A built ticket stays open, labelled
+          #    `agent:built`, until its PR merges and the PR's `Closes #<n>`
+          #    closes it. Every branch starts from main, so a ticket built
+          #    while what it depends on is still only in an open PR would be
+          #    built without it.
           jq -r '
             [ .[]
               | { number,
@@ -215,24 +222,37 @@ jobs:
           # must not drain silently out of the queue — so without this filter
           # every cron tick picks the same broken ticket, forever. Parked means
           # out of the frontier until a person takes the label off.
+          #
+          # `agent:built` is out of the frontier too: its PR is open, and
+          # building it again would open a second one.
           ticket=$(jq -r --argjson closed "$closed_positions" '
             [ .[]
               | select(.state=="OPEN")
               | select(.labels | index("agent:blocked") | not)
+              | select(.labels | index("agent:built") | not)
               | select(all(.depends[]; . as $d | $closed | index($d) != null))
             ] | .[0].number // empty
           ' /tmp/queue-sorted.json)
 
           parked_count=$(jq '[ .[] | select(.state=="OPEN") | select(.labels | index("agent:blocked")) ] | length' /tmp/queue-sorted.json)
-          open_count=$(jq '[ .[] | select(.state=="OPEN") | select(.labels | index("agent:blocked") | not) ] | length' /tmp/queue-sorted.json)
+          built_count=$(jq '[ .[] | select(.state=="OPEN") | select(.labels | index("agent:built")) ] | length' /tmp/queue-sorted.json)
+          open_count=$(jq '[ .[] | select(.state=="OPEN") | select(.labels | index("agent:blocked") | not) | select(.labels | index("agent:built") | not) ] | length' /tmp/queue-sorted.json)
           echo "remaining=$open_count" >> "$GITHUB_OUTPUT"
           if [ "$parked_count" -gt 0 ]; then
             echo "::notice::Spec #$spec has $parked_count ticket(s) parked for a person. Take \`agent:blocked\` off one to put it back in the queue."
+          fi
+          if [ "$built_count" -gt 0 ]; then
+            echo "::notice::Spec #$spec has $built_count ticket(s) built and waiting for their PRs to merge."
           fi
 
           if [ -z "$ticket" ]; then
             if [ "$open_count" -eq 0 ]; then
               echo "Queue for spec #$spec is drained."
+              echo "mode=drained" >> "$GITHUB_OUTPUT"
+            elif [ "$built_count" -gt 0 ]; then
+              # Everything left waits on a PR that hasn't merged. Stop the
+              # chain; the cron picks the queue up again after a merge.
+              echo "Spec #$spec: $open_count open ticket(s) wait on PRs to merge."
               echo "mode=drained" >> "$GITHUB_OUTPUT"
             else
               # Open tickets exist but every one is blocked. That is a cycle
@@ -598,11 +618,15 @@ jobs:
           gh issue edit "$TICKET" --remove-label "agent:in-progress" || true
 
           if [ "${{ steps.ship.outputs.shipped }}" = "true" ]; then
-            # Closing it is what advances the frontier: the next run's survey
-            # sees this position as satisfied, and whatever depended on it
-            # becomes buildable.
-            gh issue close "$TICKET" \
-              --comment "Built and opened as a draft PR, ${PR_URL}, from \`${BRANCH}\` — [logs](${RUN_URL}). Closing so the queue moves on; the pull request is where the review happens. <!-- factory:status -->"
+            # Left open, labelled `agent:built`. The PR's `Closes #<n>` closes
+            # it on merge, and only then does whatever depended on it become
+            # buildable: every branch starts from main, so building it any
+            # sooner would build it without this ticket's code.
+            gh label create "agent:built" --color 0E8A16 \
+              --description "Built; waiting for its pull request to merge" || true
+            gh issue edit "$TICKET" --add-label "agent:built"
+            gh issue comment "$TICKET" \
+              --body "Built and opened as a draft PR, ${PR_URL}, from \`${BRANCH}\` — [logs](${RUN_URL}). Tickets that depend on this one wait until it merges; the pull request is where the review happens. If the PR is closed without merging, take \`agent:built\` off to build this ticket again. <!-- factory:status -->"
           else
             # Left open on purpose. A failed ticket must not silently drain
             # out of the queue, and it must not be retried forever either — so
