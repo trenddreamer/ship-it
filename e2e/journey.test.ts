@@ -50,4 +50,21 @@ test.describe.serial("Marketplace journey", () => {
       await expect(page.getByText(hidden)).toHaveCount(0);
     }
   });
+
+  test("a visitor searches for a seeded Product and sees its Vendor", async ({ page }) => {
+    await page.goto("/");
+
+    const search = page.getByRole("searchbox", { name: "Search" });
+    await search.fill("BOEREWORS");
+    await search.press("Enter");
+
+    await expect(page).toHaveURL(/[?&]q=BOEREWORS/);
+    await expect(search).toHaveValue("BOEREWORS");
+    await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Karoo Free-Range Farm"]);
+    await expect(vendorCard(page, "Karoo Free-Range Farm")).toContainText("R 189,00");
+
+    await search.fill("honey");
+    await search.press("Enter");
+    await expect(page.getByText("No Vendors match your search.")).toBeVisible();
+  });
 });
