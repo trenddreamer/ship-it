@@ -9,7 +9,8 @@ import type { Route } from "./+types/layout";
 import type { action as feedbackAction } from "./feedback";
 
 // The layout every page sits in: a header with who is signed in and their
-// Inbox's unread count, and, for a signed-in Account, the Feedback button. Add things every signed-in page shows to this loader.
+// Inbox's unread count, and, for a signed-in Account, the Feedback button.
+// Add things every signed-in page shows to this loader.
 export async function loader({ request }: Route.LoaderArgs) {
   const account = await currentAccount(request);
   return {
@@ -92,12 +93,12 @@ function Feedback() {
   const dialog = useRef<HTMLDialogElement>(null);
   // Each sending gets a fresh fetcher: reopening the dialog after the thanks
   // starts an empty form again.
-  const [round, setRound] = useState(0);
-  const fetcher = useFetcher<typeof feedbackAction>({ key: `feedback-${round}` });
+  const [formGeneration, setFormGeneration] = useState(0);
+  const fetcher = useFetcher<typeof feedbackAction>({ key: `feedback-${formGeneration}` });
   const { pathname } = useLocation();
   const result = fetcher.state === "idle" ? fetcher.data : undefined;
   function open() {
-    if (result?.kind === "sent") setRound((n) => n + 1);
+    if (result?.kind === "sent") setFormGeneration((n) => n + 1);
     dialog.current?.showModal();
   }
   return (
@@ -136,7 +137,12 @@ function Feedback() {
             )}
           </p>
         ) : (
-          <fetcher.Form key={round} method="post" action="/feedback" className="mt-3 space-y-3">
+          <fetcher.Form
+            key={formGeneration}
+            method="post"
+            action="/feedback"
+            className="mt-3 space-y-3"
+          >
             <input type="hidden" name="page" value={pathname} />
             <label className="block">
               <span className="text-gray-600">What's wrong, or what could be better?</span>
