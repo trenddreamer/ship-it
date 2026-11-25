@@ -1,4 +1,4 @@
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 import { accountRowByEmail, toAccount, type Account } from "./account";
 import { decoyHash, passwordMatches } from "./password";
 import type { SignInInput } from "./schemas";

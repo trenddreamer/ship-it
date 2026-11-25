@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { accounts, charges, deliveries, products, subscriptions, vendors } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
 import { formatPrice } from "~/modules/price";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /** A Charge as the Customer who paid it sees it. */
 export interface CustomerCharge {

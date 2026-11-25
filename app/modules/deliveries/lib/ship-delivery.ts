@@ -4,7 +4,7 @@ import { formatCalendarDate, type CalendarDate } from "~/modules/calendar";
 import { chargeDelivery } from "~/modules/charges";
 import { sendNotification } from "~/modules/notifications";
 import { formatPrice } from "~/modules/price";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 export type ShipResult = { ok: true } | { ok: false; error: ShipRefusal };
 

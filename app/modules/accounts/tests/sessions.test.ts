@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 import { ensureFirstAdmin, signIn, signUpCustomer, signUpVendor, type Account } from "../index";
 import { createAccountSessions, landingPath } from "../server";
 import { freshDatabase } from "./database";

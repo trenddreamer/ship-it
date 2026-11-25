@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { accounts, products, subscriptions, type DeliverySchedule } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /** An active Subscription to one of a Vendor's Products, as the Vendor sees it. */
 export interface VendorSubscription {

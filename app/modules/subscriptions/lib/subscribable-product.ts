@@ -7,7 +7,7 @@ import {
   type DeliverySchedule,
 } from "~/db/schema";
 import { formatPrice } from "~/modules/price";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /** A Product a Customer can subscribe to, with what they need to pick. */
 export interface SubscribableProduct {

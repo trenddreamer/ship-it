@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { accounts } from "~/db/schema";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 import { accountRowByEmail } from "./account";
 import { hashPassword } from "./password";
 

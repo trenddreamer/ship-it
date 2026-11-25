@@ -2,7 +2,7 @@ import { asc, eq, and, isNull } from "drizzle-orm";
 import { accounts, deliveries, deliveryAddresses, products, subscriptions } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
 import { formatPrice } from "~/modules/price";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /** A Delivery that has fallen due and isn't shipped yet, as its Vendor sees it. */
 export interface DueDelivery {

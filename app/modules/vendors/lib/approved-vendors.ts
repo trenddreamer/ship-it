@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { products, vendors } from "~/db/schema";
 import { formatPrice } from "~/modules/price";
-import type { MarketplaceDatabase } from "./database";
+import type { MarketplaceDatabase } from "~/db/database";
 
 export interface ShownProduct {
   id: number;

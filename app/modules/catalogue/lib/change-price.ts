@@ -3,7 +3,7 @@ import { priceChanges, products, vendors } from "~/db/schema";
 import { addDays, formatCalendarDate, type CalendarDate } from "~/modules/calendar";
 import { formatPrice } from "~/modules/price";
 import { notifySubscribers } from "~/modules/subscriptions";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /** How long existing subscribers keep the old Price after a change. */
 const noticePeriodDays = 7;

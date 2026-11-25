@@ -1,5 +1,5 @@
 import type { CalendarDate } from "~/modules/calendar";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 import { endSubscriptions } from "./end-subscriptions";
 import { notifyVendor } from "./notify-vendor";
 

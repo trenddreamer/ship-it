@@ -8,7 +8,7 @@ import {
 } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
 import { formatPrice } from "~/modules/price";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /** A Product to add: it offers at least one Delivery Schedule. */
 export interface NewProduct {

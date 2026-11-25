@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { vendors, type VendorApprovalStatus } from "~/db/schema";
-import type { MarketplaceDatabase } from "./database";
+import type { MarketplaceDatabase } from "~/db/database";
 
 export interface Vendor {
   id: number;

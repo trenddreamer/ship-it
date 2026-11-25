@@ -4,7 +4,7 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import * as schema from "~/db/schema";
-import type { MarketplaceDatabase } from "../index";
+import type { MarketplaceDatabase } from "~/db/database";
 
 export async function freshDatabase(): Promise<MarketplaceDatabase> {
   const database = drizzle({ client: createClient({ url: ":memory:" }), schema });

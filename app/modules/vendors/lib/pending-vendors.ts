@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { vendors } from "~/db/schema";
-import type { MarketplaceDatabase } from "./database";
+import type { MarketplaceDatabase } from "~/db/database";
 
 export interface PendingVendor {
   id: number;

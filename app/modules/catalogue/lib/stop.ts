@@ -7,7 +7,7 @@ import {
   countActiveSubscriptions,
   type VendorStop,
 } from "~/modules/subscriptions";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 export type StopResult = { ok: true; cancelled: number } | { ok: false; error: StopRefusal };
 

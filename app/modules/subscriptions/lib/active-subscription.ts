@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { subscriptions, type DeliverySchedule } from "~/db/schema";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /** An active Subscription, as the module needs it to change it. */
 export interface ActiveSubscription {

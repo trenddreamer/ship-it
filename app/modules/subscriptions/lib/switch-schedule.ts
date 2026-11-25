@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { productDeliverySchedules, subscriptions, type DeliverySchedule } from "~/db/schema";
 import { addDays, type CalendarDate } from "~/modules/calendar";
 import { catchUpSubscription } from "~/modules/deliveries";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 import { findActiveSubscription } from "./active-subscription";
 
 /** Which Subscription to switch, and the Delivery Schedule to switch it to. */

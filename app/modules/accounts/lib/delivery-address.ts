@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { deliveryAddresses } from "~/db/schema";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 function line(missing: string) {
   return z

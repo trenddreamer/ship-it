@@ -1,6 +1,6 @@
 import { accounts, vendors } from "~/db/schema";
 import { notifyAdmins } from "~/modules/notifications";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 import { accountRowByEmail, toAccount, type Account } from "./account";
 import { hashPassword } from "./password";
 import type { CustomerSignUp, VendorSignUp } from "./schemas";

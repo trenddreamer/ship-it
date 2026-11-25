@@ -10,7 +10,7 @@ import { setDeliveryAddress, signUpCustomer, signUpVendor } from "~/modules/acco
 import type { CalendarDate } from "~/modules/calendar";
 import { addProduct, type NewProduct } from "~/modules/catalogue";
 import { listCustomerSubscriptions, subscribe } from "~/modules/subscriptions";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 export async function freshDatabase(): Promise<MarketplaceDatabase> {
   const database = drizzle({ client: createClient({ url: ":memory:" }), schema });

@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { accounts, vendors } from "~/db/schema";
 import { sendNotification } from "~/modules/notifications";
 import { z } from "zod";
-import type { MarketplaceDatabase } from "./database";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /** The Admin's decision form: which Vendor, and the approval status it gets. */
 export const vendorDecisionSchema = z.object({

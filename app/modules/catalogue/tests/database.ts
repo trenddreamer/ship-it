@@ -7,7 +7,7 @@ import * as schema from "~/db/schema";
 import { setDeliveryAddress, signUpCustomer } from "~/modules/accounts";
 import type { CalendarDate } from "~/modules/calendar";
 import { subscribe } from "~/modules/subscriptions";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 export async function freshDatabase(): Promise<MarketplaceDatabase> {
   const database = drizzle({ client: createClient({ url: ":memory:" }), schema });

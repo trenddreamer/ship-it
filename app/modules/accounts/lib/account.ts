@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { accounts, type AccountKind } from "~/db/schema";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /**
  * A signed-in person: exactly one of a Customer, a Vendor or an Admin. A

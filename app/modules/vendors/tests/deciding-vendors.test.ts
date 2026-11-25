@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { signUpVendor } from "~/modules/accounts";
 import { countUnread, openInbox } from "~/modules/notifications";
-import { decideVendor, findVendor, listApprovedVendors, type MarketplaceDatabase } from "../index";
+import type { MarketplaceDatabase } from "~/db/database";
+import { decideVendor, findVendor, listApprovedVendors } from "../index";
 import { freshDatabase } from "./database";
 
 /** Signs a Vendor up the way a visitor does; returns its Vendor and Account ids. */

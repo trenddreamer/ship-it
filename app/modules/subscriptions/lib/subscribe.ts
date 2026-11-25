@@ -3,7 +3,7 @@ import { priceChanges, subscriptions, type DeliverySchedule } from "~/db/schema"
 import { findAccount, findDeliveryAddress } from "~/modules/accounts";
 import { addDays, type CalendarDate } from "~/modules/calendar";
 import { deliveryScheduleOptions } from "~/modules/deliveries";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 import { notifyVendor } from "./notify-vendor";
 import { findSubscribableProduct } from "./subscribable-product";
 

@@ -1,7 +1,7 @@
 import { and, isNull, lte, or } from "drizzle-orm";
 import { subscriptions } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 import { catchUpSubscription } from "./catch-up";
 
 /**

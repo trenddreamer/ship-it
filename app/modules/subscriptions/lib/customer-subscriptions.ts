@@ -9,7 +9,7 @@ import {
 } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
 import { formatPrice } from "~/modules/price";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 
 /** One of a Customer's Subscriptions, active or cancelled, as they see it. */
 export interface CustomerSubscription {

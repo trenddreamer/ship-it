@@ -1,6 +1,6 @@
 import { createCookieSessionStorage, redirect } from "react-router";
 import type { AccountKind } from "~/db/schema";
-import type { MarketplaceDatabase } from "~/modules/vendors";
+import type { MarketplaceDatabase } from "~/db/database";
 import { findAccount, type Account, type AccountOf } from "./account";
 
 /** Where a visitor goes to sign in, when a page needs an Account. */
