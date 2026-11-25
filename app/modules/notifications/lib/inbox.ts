@@ -28,7 +28,6 @@ export async function sendNotification(
       accountId,
       kind: notification.kind,
       message: messageFor(notification),
-      sentAt: new Date(),
     })
     .run();
 }

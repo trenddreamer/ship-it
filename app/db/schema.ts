@@ -188,7 +188,10 @@ export const notifications = sqliteTable(
       .references(() => accounts.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
     message: text("message").notNull(),
-    sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
+    // The database stamps it, so no module reads the clock.
+    sentAt: integer("sent_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsec') * 1000 as integer))`),
     read: integer("read", { mode: "boolean" }).notNull().default(false),
   },
   (table) => [index("notifications_account_id_idx").on(table.accountId)],
