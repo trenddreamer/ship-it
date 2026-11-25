@@ -12,4 +12,4 @@ export {
   type VendorSignUp,
 } from "./lib/schemas";
 export { signIn, type SignInResult } from "./lib/sign-in";
-export { signUpCustomer, type SignUpResult } from "./lib/sign-up";
+export { signUpCustomer, signUpVendor, type SignUpResult } from "./lib/sign-up";

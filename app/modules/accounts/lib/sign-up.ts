@@ -1,8 +1,8 @@
-import { accounts } from "~/db/schema";
+import { accounts, vendors } from "~/db/schema";
 import type { MarketplaceDatabase } from "~/modules/vendors";
 import { accountRowByEmail, toAccount, type Account } from "./account";
 import { hashPassword } from "./password";
-import type { CustomerSignUp } from "./schemas";
+import type { CustomerSignUp, VendorSignUp } from "./schemas";
 
 export type SignUpResult = { ok: true; account: Account } | { ok: false; error: "email-taken" };
 
@@ -21,5 +21,31 @@ export async function signUpCustomer(
     })
     .returning()
     .get();
+  return { ok: true, account: toAccount(row) };
+}
+
+/**
+ * Signs a visitor up as a Vendor: creates their Account and their Vendor
+ * together, the Vendor pending until an Admin approves it. Refused, creating
+ * neither, when the email already has an Account.
+ */
+export async function signUpVendor(
+  database: MarketplaceDatabase,
+  input: VendorSignUp,
+): Promise<SignUpResult> {
+  if (await accountRowByEmail(database, input.email)) return { ok: false, error: "email-taken" };
+  const passwordHash = await hashPassword(input.password);
+  const row = await database.transaction(async (tx) => {
+    const vendor = await tx
+      .insert(vendors)
+      .values({ name: input.businessName, description: input.description })
+      .returning({ id: vendors.id })
+      .get();
+    return tx
+      .insert(accounts)
+      .values({ email: input.email, passwordHash, kind: "vendor", vendorId: vendor.id })
+      .returning()
+      .get();
+  });
   return { ok: true, account: toAccount(row) };
 }
