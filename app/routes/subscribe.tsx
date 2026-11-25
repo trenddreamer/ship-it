@@ -68,7 +68,7 @@ export default function Subscribe({ loaderData, actionData }: Route.ComponentPro
   return (
     <main className="mx-auto max-w-md p-8">
       <h1 className="text-3xl font-semibold">Subscribe to {product.name}</h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-muted">
         From {product.vendorName}. {product.description}
       </p>
       <p className="mt-4">
@@ -86,12 +86,12 @@ export default function Subscribe({ loaderData, actionData }: Route.ComponentPro
             </label>
           ))}
           {scheduleErrors ? (
-            <p id="schedule-errors" className="mt-1 text-sm text-red-700">
+            <p id="schedule-errors" className="mt-1 text-sm text-danger">
               {scheduleErrors.join(" ")}
             </p>
           ) : null}
         </fieldset>
-        <button type="submit" className="rounded bg-gray-900 px-4 py-2 text-white">
+        <button type="submit" className="rounded bg-primary px-4 py-2 text-on-primary">
           Subscribe
         </button>
       </Form>

@@ -33,9 +33,9 @@ export function DueDeliveries({
         <FormError message={formError} />
       </div>
       {deliveries.length === 0 ? (
-        <p className="mt-4 italic text-gray-500">No Deliveries are due.</p>
+        <p className="mt-4 italic text-muted">No Deliveries are due.</p>
       ) : (
-        <ul className="mt-4 divide-y divide-gray-100">
+        <ul className="mt-4 divide-y divide-line">
           {deliveries.map((delivery) => {
             const { street, suburb, city, postalCode } = delivery.deliveryAddress;
             return (
@@ -43,7 +43,7 @@ export function DueDeliveries({
                 <div>
                   <h3 className="font-medium">{delivery.productName}</h3>
                   <p className="text-sm">Due {delivery.dueOn}</p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted">
                     To {delivery.customerEmail}, {street}, {suburb}, {city}, {postalCode}
                   </p>
                 </div>
@@ -54,7 +54,7 @@ export function DueDeliveries({
                     <button
                       type="submit"
                       aria-label={`Mark ${delivery.productName} for ${delivery.customerEmail} shipped`}
-                      className="rounded border border-gray-300 px-3 py-1 text-sm"
+                      className="rounded border border-line-strong px-3 py-1 text-sm"
                     >
                       Mark shipped
                     </button>

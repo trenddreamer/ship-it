@@ -34,7 +34,7 @@ export default function SignUp({ actionData }: Route.ComponentProps) {
   return (
     <main className="mx-auto max-w-md p-8">
       <h1 className="text-3xl font-semibold">Sign up as a Customer</h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-muted">
         Selling something? <Link to="/sign-up/vendor">Sign up as a Vendor</Link> instead.
       </p>
       <Form method="post" className="mt-6 space-y-4">
@@ -52,11 +52,11 @@ export default function SignUp({ actionData }: Route.ComponentProps) {
           autoComplete="new-password"
           errors={errors.password}
         />
-        <button type="submit" className="rounded bg-gray-900 px-4 py-2 text-white">
+        <button type="submit" className="rounded bg-primary px-4 py-2 text-on-primary">
           Sign up
         </button>
       </Form>
-      <p className="mt-6 text-gray-600">
+      <p className="mt-6 text-muted">
         Already have an Account? <Link to="/sign-in">Sign in</Link>.
       </p>
     </main>

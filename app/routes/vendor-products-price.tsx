@@ -55,7 +55,7 @@ export default function ChangePrice({ loaderData, actionData }: Route.ComponentP
   return (
     <main className="mx-auto max-w-md p-8">
       <h1 className="text-3xl font-semibold">Change the Price of {loaderData.name}</h1>
-      <p className="mt-2 text-gray-600">
+      <p className="mt-2 text-muted">
         The Price is {loaderData.price} per Delivery now. Customers who subscribe from now on pay
         the new Price straight away. Customers already subscribed are told, and keep the current
         Price for Deliveries due in the next 7 days. <Link to="/vendor">Back to your Products</Link>
@@ -64,7 +64,7 @@ export default function ChangePrice({ loaderData, actionData }: Route.ComponentP
       <Form method="post" className="mt-6 space-y-4">
         <FormError message={actionData?.formError} />
         <TextField label="New Price per Delivery (R)" name="price" errors={errors.price} />
-        <button type="submit" className="rounded bg-gray-900 px-4 py-2 text-white">
+        <button type="submit" className="rounded bg-primary px-4 py-2 text-on-primary">
           Change Price
         </button>
       </Form>

@@ -50,11 +50,11 @@ export default function SignIn({ actionData }: Route.ComponentProps) {
           autoComplete="current-password"
           errors={actionData?.fieldErrors?.password}
         />
-        <button type="submit" className="rounded bg-gray-900 px-4 py-2 text-white">
+        <button type="submit" className="rounded bg-primary px-4 py-2 text-on-primary">
           Sign in
         </button>
       </Form>
-      <p className="mt-6 text-gray-600">
+      <p className="mt-6 text-muted">
         No Account yet? <Link to="/sign-up">Sign up</Link>.
       </p>
     </main>
