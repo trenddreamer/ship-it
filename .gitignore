@@ -3,6 +3,8 @@ node_modules/
 /.react-router/
 /data/
 .env
+.env.*
+!.env.example
 /reports/
 /.stryker-tmp/
 /test-results/
