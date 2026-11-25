@@ -125,10 +125,13 @@ describe("the pages", () => {
 
   it("only use colour names the theme defines", () => {
     const names = themeColours();
+    // The first word of each name (`danger` in `danger-soft`), so that a name
+    // the theme doesn't define, such as `text-danger-strong`, is still caught.
+    const families = [...new Set([...names.keys()].map((name) => name.split("-")[0]))];
     const used = pages().flatMap(([, source]) =>
       [
         ...source.matchAll(
-          /\b(?:bg|text|border|divide)-((?:surface|raised|ink|muted|line|primary|on|danger|warning|accent)[a-z-]*)/g,
+          new RegExp(`\\b(?:bg|text|border|divide)-((?:${families.join("|")})[a-z-]*)`, "g"),
         ),
       ].map(([, name = ""]) => name),
     );
