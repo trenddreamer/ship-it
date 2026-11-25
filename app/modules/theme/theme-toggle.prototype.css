@@ -1,0 +1,19 @@
+/*
+ * PROTOTYPE (theme toggle), throwaway. Lives on the prototype/theme-toggle
+ * branch only.
+ *
+ * Why this is CSS and not an inline `style.colorScheme`: the production build
+ * runs Lightning CSS, which turns every `light-dark()` into
+ * `var(--lightningcss-light, …) var(--lightningcss-dark, …)` and only flips
+ * those variables where it sees a `color-scheme` declaration. An inline style
+ * never passes through Lightning CSS, so it would switch native form controls
+ * but leave every theme colour where it was. A declaration here does get
+ * compiled into the variables.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}

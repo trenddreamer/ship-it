@@ -1,2 +1,3 @@
 @import "tailwindcss";
 @import "./modules/theme/theme.css";
+@import "./modules/theme/theme-toggle.prototype.css";

@@ -1,6 +1,16 @@
 import { useRef, useState } from "react";
 import { Form, Link, Outlet, useFetcher, useLocation, useMatches } from "react-router";
 import { currentAccount } from "~/accounts.server";
+import { PrototypeSwitcher, usePrototypeVariant } from "~/components/prototype-switcher";
+import {
+  ThemeToggleState,
+  themeToggleVariants,
+  useThemeChoice,
+  VariantA,
+  VariantB,
+  VariantC,
+  VariantD,
+} from "~/components/theme-toggle.prototype";
 import { db } from "~/db/client.server";
 import { landingPath } from "~/modules/accounts/server";
 import { feedbackTextLength } from "~/modules/feedback";
@@ -39,6 +49,17 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
   // nothing is unread.
   const inInbox = useMatches().some((match) => match.id === "routes/inbox");
   const unread = account && !inInbox ? account.unread : 0;
+  // PROTOTYPE (theme toggle): which variant to show, and the in-memory choice.
+  const variant = usePrototypeVariant(themeToggleVariants);
+  const theme = useThemeChoice();
+  const headerToggle =
+    variant === "A" ? (
+      <VariantA theme={theme} />
+    ) : variant === "B" ? (
+      <VariantB theme={theme} />
+    ) : variant === "D" ? (
+      <VariantD theme={theme} />
+    ) : null;
   return (
     <>
       <header className="border-b border-line">
@@ -70,6 +91,7 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
               <Link to="/sign-up">Sign up</Link>
             </>
           )}
+          {headerToggle}
         </nav>
       </header>
       {account ? (
@@ -81,6 +103,10 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
         <Outlet />
       )}
       {account && <Feedback />}
+      {variant === "C" && <VariantC theme={theme} />}
+      <PrototypeSwitcher variants={themeToggleVariants} current={variant}>
+        <ThemeToggleState variant={variant} theme={theme} />
+      </PrototypeSwitcher>
     </>
   );
 }
