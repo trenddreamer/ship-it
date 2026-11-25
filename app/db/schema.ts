@@ -236,3 +236,24 @@ export const charges = sqliteTable("charges", {
   /** The day the Delivery was marked shipped, "YYYY-MM-DD" in Africa/Johannesburg. */
   chargedOn: text("charged_on").notNull(),
 });
+
+/**
+ * Who gave Feedback, and when: one row per piece of Feedback sent to the
+ * Factory. It holds nothing else on purpose: no text, no issue number and no
+ * URL. Feedback becomes a public issue, and nothing in the Marketplace may
+ * link an Account to a public issue.
+ */
+export const feedback = sqliteTable(
+  "feedback",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    // The database stamps it, so no module reads the clock.
+    givenAt: integer("given_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(cast(unixepoch('subsec') * 1000 as integer))`),
+  },
+  (table) => [index("feedback_account_id_idx").on(table.accountId)],
+);
