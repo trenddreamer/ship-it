@@ -9,7 +9,7 @@ import {
 import { addCustomer, addVendor } from "./database";
 import { eggsWithSubscriptions } from "./subscribed-eggs";
 
-describe("offering a Delivery Schedule again", () => {
+describe("a Vendor offers a Delivery Schedule again", () => {
   it("adds a Delivery Schedule to one of the Vendor's Products", async () => {
     const { database, karoo, eggs } = await eggsWithSubscriptions();
 

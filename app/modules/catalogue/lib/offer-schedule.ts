@@ -18,7 +18,7 @@ export interface ScheduleOffer {
 export type OfferScheduleResult = { ok: true } | { ok: false; error: OfferScheduleRefusal };
 
 /**
- * Why offering was refused: the Product isn't the Vendor's or it stopped
+ * Why the Vendor may not offer it: the Product isn't the Vendor's or it stopped
  * selling it, or the Product already offers that Delivery Schedule.
  */
 export type OfferScheduleRefusal = "product-not-found" | "already-offered";
