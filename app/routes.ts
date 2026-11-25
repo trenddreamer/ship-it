@@ -9,6 +9,7 @@ export default [
     route("sign-out", "routes/sign-out.tsx"),
     route("vendor", "routes/vendor.tsx"),
     route("vendor/products/new", "routes/vendor-products-new.tsx"),
+    route("vendor/products/:productId/stop", "routes/vendor-products-stop.tsx"),
     route("admin", "routes/admin.tsx"),
     route("inbox", "routes/inbox.tsx"),
     route("delivery-address", "routes/delivery-address.tsx"),

@@ -2,7 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { priceChanges, subscriptions, type DeliverySchedule } from "~/db/schema";
 import { findAccount, findDeliveryAddress } from "~/modules/accounts";
 import { addDays, type CalendarDate } from "~/modules/calendar";
-import { deliveryScheduleOptions } from "~/modules/catalogue";
+import { deliveryScheduleOptions } from "~/modules/deliveries";
 import type { MarketplaceDatabase } from "~/modules/vendors";
 import { notifyVendor } from "./notify-vendor";
 import { findSubscribableProduct } from "./subscribable-product";

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { countUnread, openInbox } from "~/modules/notifications";
 import { cancelSubscription, listCustomerSubscriptions } from "~/modules/subscriptions";
 import { listApprovedVendors } from "~/modules/vendors";
-import { addProduct, changePrice, listVendorProducts } from "../index";
+import { addProduct, changePrice, listVendorProducts, stopSelling } from "../index";
 import { addSubscriber, addVendor, freshDatabase } from "./database";
 
 const eggs = {
@@ -89,5 +89,14 @@ describe("changePrice", () => {
       await changePrice(database, karoo, { productId, priceCents: 15000 }, "2026-11-10"),
     ).toEqual({ ok: false, error: "same-price" });
     expect(await countUnread(database, thandi)).toBe(0);
+  });
+
+  it("refuses a Product the Vendor stopped selling", async () => {
+    const { database, karoo, productId } = await karooEggs();
+    await stopSelling(database, karoo, { productId, deliverySchedule: null }, "2026-11-05");
+
+    expect(
+      await changePrice(database, karoo, { productId, priceCents: 16500 }, "2026-11-10"),
+    ).toEqual({ ok: false, error: "product-not-found" });
   });
 });

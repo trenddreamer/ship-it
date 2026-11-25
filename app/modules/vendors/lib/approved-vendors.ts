@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { products, vendors } from "~/db/schema";
 import { formatPrice } from "~/modules/price";
 import type { MarketplaceDatabase } from "./database";
@@ -24,7 +24,8 @@ export interface ShownVendor {
  * The Vendors a Customer may see: every approved Vendor, each with its
  * Products and their Price per Delivery, ordered by name. Approved Vendors
  * without Products are included with an empty list. Pending and rejected
- * Vendors, and their Products, are never returned.
+ * Vendors, and their Products, are never returned; nor are Products their
+ * Vendor stopped selling.
  */
 export async function listApprovedVendors(database: MarketplaceDatabase): Promise<ShownVendor[]> {
   const approved = await database
@@ -42,9 +43,12 @@ export async function listApprovedVendors(database: MarketplaceDatabase): Promis
     .select()
     .from(products)
     .where(
-      inArray(
-        products.vendorId,
-        approved.map((vendor) => vendor.id),
+      and(
+        inArray(
+          products.vendorId,
+          approved.map((vendor) => vendor.id),
+        ),
+        isNull(products.stoppedOn),
       ),
     )
     .orderBy(asc(products.name), asc(products.id))

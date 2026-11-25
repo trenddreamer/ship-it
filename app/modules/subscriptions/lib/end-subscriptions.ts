@@ -1,14 +1,22 @@
 import { and, eq, inArray, isNull, type SQL } from "drizzle-orm";
-import { accounts, products, subscriptions, type DeliverySchedule } from "~/db/schema";
+import { accounts, products, subscriptions, vendors, type DeliverySchedule } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
 import type { DatabaseOrTransaction } from "~/modules/notifications";
 
 /**
- * Which active Subscriptions to cancel. For now one Customer's, by id. When a
- * Vendor stops a Product or a Delivery Schedule (#17), add a variant here,
- * e.g. `{ productId; deliverySchedule? }`, and its case in `matching`.
+ * Which active Subscriptions to cancel: one Customer's, by id; or every one
+ * to a Product a Vendor stopped (see `VendorStop`).
  */
-export type SubscriptionsToEnd = { customerId: number; subscriptionId: number };
+export type SubscriptionsToEnd = { customerId: number; subscriptionId: number } | VendorStop;
+
+/**
+ * What a Vendor stops: one of its Products, or one Delivery Schedule of it.
+ * A null `deliverySchedule` means the whole Product.
+ */
+export interface VendorStop {
+  productId: number;
+  deliverySchedule: DeliverySchedule | null;
+}
 
 /** A Subscription just cancelled, with what a Notification about it needs. */
 export interface EndedSubscription {
@@ -18,6 +26,7 @@ export interface EndedSubscription {
   productId: number;
   productName: string;
   vendorId: number;
+  vendorName: string;
   deliverySchedule: DeliverySchedule;
 }
 
@@ -47,10 +56,12 @@ export async function endSubscriptions(
       productId: subscriptions.productId,
       productName: products.name,
       vendorId: products.vendorId,
+      vendorName: vendors.name,
       deliverySchedule: subscriptions.deliverySchedule,
     })
     .from(subscriptions)
     .innerJoin(products, eq(products.id, subscriptions.productId))
+    .innerJoin(vendors, eq(vendors.id, products.vendorId))
     .innerJoin(accounts, eq(accounts.id, subscriptions.accountId))
     .where(
       inArray(
@@ -62,7 +73,16 @@ export async function endSubscriptions(
     .all();
 }
 
-function matching(which: SubscriptionsToEnd): SQL | undefined {
+/** The condition that picks out these Subscriptions, active or not. */
+export function matching(which: SubscriptionsToEnd): SQL | undefined {
+  if ("productId" in which) {
+    return and(
+      eq(subscriptions.productId, which.productId),
+      which.deliverySchedule === null
+        ? undefined
+        : eq(subscriptions.deliverySchedule, which.deliverySchedule),
+    );
+  }
   return and(
     eq(subscriptions.id, which.subscriptionId),
     eq(subscriptions.accountId, which.customerId),

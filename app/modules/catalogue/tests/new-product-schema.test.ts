@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { deliveryScheduleOptions, newProductSchema } from "../index";
+import { newProductSchema } from "../index";
 
 const form = {
   name: " Free-range eggs (30) ",
@@ -59,15 +59,5 @@ describe("newProductSchema", () => {
       newProductSchema.safeParse({ ...form, name: "n".repeat(120), description: "d".repeat(2000) })
         .success,
     ).toBe(true);
-  });
-});
-
-describe("deliveryScheduleOptions", () => {
-  it("names each Delivery Schedule a Vendor can offer, in order", () => {
-    expect(deliveryScheduleOptions).toEqual([
-      { value: "weekly", label: "Weekly" },
-      { value: "every-two-weeks", label: "Every two weeks" },
-      { value: "monthly", label: "Monthly" },
-    ]);
   });
 });

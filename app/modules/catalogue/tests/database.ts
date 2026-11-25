@@ -1,5 +1,5 @@
 // Test fixture: a fresh in-memory libSQL Marketplace database, migrated like
-// the real one, plus helpers to add Vendors and subscribed Customers to it.
+// the real one, plus helpers to add a Vendor and a Customer to it.
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
@@ -28,25 +28,27 @@ export async function addVendor(
   return vendor.id;
 }
 
-/**
- * Signs a Customer up, with a Delivery Address, and subscribes them weekly
- * to a Product on `subscribedOn`. Returns their Account id.
- */
+/** Signs a Customer up with a Delivery Address, ready to subscribe. Returns their Account id. */
+export async function addCustomer(database: MarketplaceDatabase, email: string): Promise<number> {
+  const result = await signUpCustomer(database, { email, password: "a-good-password" });
+  if (!result.ok) throw new Error(`signing up ${email} failed`);
+  await setDeliveryAddress(database, result.account.id, {
+    street: "12 Long Street",
+    suburb: "Gardens",
+    city: "Cape Town",
+    postalCode: "8001",
+  });
+  return result.account.id;
+}
+
+/** Signs a Customer up and subscribes them weekly to a Product on `subscribedOn`. Returns their Account id. */
 export async function addSubscriber(
   database: MarketplaceDatabase,
   email: string,
   productId: number,
   subscribedOn: CalendarDate,
 ): Promise<number> {
-  const signedUp = await signUpCustomer(database, { email, password: "a-good-password" });
-  if (!signedUp.ok) throw new Error(`signing up ${email} failed`);
-  const customerId = signedUp.account.id;
-  await setDeliveryAddress(database, customerId, {
-    street: "12 Long Street",
-    suburb: "Gardens",
-    city: "Cape Town",
-    postalCode: "8001",
-  });
+  const customerId = await addCustomer(database, email);
   const subscribed = await subscribe(
     database,
     customerId,

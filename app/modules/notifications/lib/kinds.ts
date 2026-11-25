@@ -33,6 +33,21 @@ const kinds = {
     customerEmail: string;
     productName: string;
   }) => `${customerEmail} cancelled their Subscription to ${productName}.`,
+  /** To a Customer, when the Vendor stops selling the Product they subscribe to. */
+  "product-stopped": ({ vendorName, productName }: { vendorName: string; productName: string }) =>
+    `${vendorName} cancelled your Subscription to ${productName}: it stopped selling it.`,
+  /** To a Customer, when the Vendor stops offering their Subscription's Delivery Schedule. */
+  "delivery-schedule-stopped": ({
+    vendorName,
+    productName,
+    scheduleLabel,
+  }: {
+    vendorName: string;
+    productName: string;
+    /** The Delivery Schedule as shown to people, e.g. "Every two weeks". */
+    scheduleLabel: string;
+  }) =>
+    `${vendorName} cancelled your Subscription to ${productName}: it stopped delivering it ${scheduleLabel.toLowerCase()}.`,
   /** To a Customer, when a Vendor marks one of their Deliveries shipped (and charges it). */
   "delivery-shipped": ({
     vendorName,

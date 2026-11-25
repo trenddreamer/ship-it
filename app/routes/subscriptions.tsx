@@ -4,7 +4,7 @@ import { FormError } from "~/components/text-field";
 import { db } from "~/db/client.server";
 import { findDeliveryAddress } from "~/modules/accounts";
 import { formatCalendarDate } from "~/modules/calendar";
-import { deliveryScheduleOptions } from "~/modules/catalogue";
+import { deliveryScheduleOptions } from "~/modules/deliveries";
 import {
   cancelSubscription,
   changeSubscriptionSchema,

@@ -7,7 +7,15 @@ export {
   type CatalogueProduct,
   type NewProduct,
 } from "./lib/products";
-export { deliveryScheduleOptions, newProductSchema } from "./lib/new-product-schema";
+export { newProductSchema } from "./lib/new-product-schema";
+export {
+  previewStop,
+  stopSelling,
+  type StopPreview,
+  type StopRefusal,
+  type StopResult,
+} from "./lib/stop";
+export { stopSchema } from "./lib/stop-schema";
 export {
   changePrice,
   type ChangePriceRefusal,

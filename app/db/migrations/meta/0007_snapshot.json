@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "85ff1e9f-5646-4e84-8f51-915928aa29cc",
+  "id": "651ee75c-2ea1-4d4c-85cd-ccfff0f0dae0",
   "prevId": "26b6cbcd-c6ad-4987-85b1-e1a684782d54",
   "tables": {
     "accounts": {
@@ -345,66 +345,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "price_changes": {
-      "name": "price_changes",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "product_id": {
-          "name": "product_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "price_cents": {
-          "name": "price_cents",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "changed_on": {
-          "name": "changed_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "price_changes_product_id_idx": {
-          "name": "price_changes_product_id_idx",
-          "columns": [
-            "product_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "price_changes_product_id_products_id_fk": {
-          "name": "price_changes_product_id_products_id_fk",
-          "tableFrom": "price_changes",
-          "tableTo": "products",
-          "columnsFrom": [
-            "product_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "product_delivery_schedules": {
       "name": "product_delivery_schedules",
       "columns": {
@@ -489,6 +429,13 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "stopped_on": {
+          "name": "stopped_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {
@@ -553,13 +500,6 @@
         "subscribed_on": {
           "name": "subscribed_on",
           "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "price_change_id": {
-          "name": "price_change_id",
-          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -636,19 +576,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "subscriptions_price_change_id_price_changes_id_fk": {
-          "name": "subscriptions_price_change_id_price_changes_id_fk",
-          "tableFrom": "subscriptions",
-          "tableTo": "price_changes",
-          "columnsFrom": [
-            "price_change_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },

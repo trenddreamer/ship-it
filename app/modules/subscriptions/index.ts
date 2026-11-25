@@ -24,3 +24,6 @@ export {
   type ProductSubscriptions,
   type VendorSubscription,
 } from "./lib/vendor-subscriptions";
+export { cancelForVendorStop, countActiveSubscriptions } from "./lib/vendor-stop";
+export type { VendorStop } from "./lib/end-subscriptions";
+export { notifySubscribers } from "./lib/notify-subscribers";
