@@ -93,6 +93,21 @@ describe("the GitHub tracker", () => {
   });
 
   it.each([
+    ["no html_url", { id: 1, number: 42 }],
+    ["an html_url that isn't a string", { html_url: 42 }],
+    ["a body that isn't JSON", "Created"],
+  ])("counts an OK answer with %s as sent, with no URL", async (_, body) => {
+    const fetch = stubFetch(answer(201, body));
+
+    const { database, account, result } = await send(fetch);
+
+    expect(result).toStrictEqual({ kind: "sent" });
+    expect(await feedbackRows(database)).toEqual([
+      expect.objectContaining({ accountId: account.id }),
+    ]);
+  });
+
+  it.each([
     [404, "Not Found"],
     [422, "Validation Failed"],
     [502, "Bad Gateway"],

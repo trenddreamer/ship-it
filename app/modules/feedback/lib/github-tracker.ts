@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Tracker } from "./tracker";
 
 export type GitHubTrackerOptions = {
@@ -8,6 +9,12 @@ export type GitHubTrackerOptions = {
   /** The `fetch` to call GitHub with. Defaults to the global one; tests pass a stub. */
   fetch?: typeof fetch;
 };
+
+/**
+ * The part of GitHub's answer the tracker uses. An OK answer means the issue
+ * is open, so one without a usable `html_url` is still sent, with no URL.
+ */
+const openedIssue = z.object({ html_url: z.string() });
 
 /**
  * A Tracker that opens a real GitHub issue through the REST API, with its
@@ -37,8 +44,8 @@ export function githubTracker({
           `GitHub didn't open the issue in ${repo}: ${response.status} ${await response.text()}`,
         );
       }
-      const { html_url: issueUrl } = (await response.json()) as { html_url: string };
-      return issueUrl;
+      const opened = openedIssue.safeParse(await response.json().catch(() => undefined));
+      return opened.success ? opened.data.html_url : undefined;
     },
   };
 }
