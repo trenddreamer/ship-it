@@ -3,6 +3,7 @@
 // actions, see `./server`.
 export type { Account, AccountOf } from "./lib/account";
 export { findAccount } from "./lib/account";
+export { ensureFirstAdmin, type FirstAdmin } from "./lib/first-admin";
 export {
   customerSignUpSchema,
   signInSchema,
