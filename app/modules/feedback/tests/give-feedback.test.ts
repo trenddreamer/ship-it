@@ -78,6 +78,7 @@ describe("giving Feedback", () => {
 
       expect(result).toEqual({ kind: "sent" });
       expect(tracker.issues).toHaveLength(1);
+      expect(await feedbackRows(database)).toHaveLength(1);
     });
   });
 
@@ -180,7 +181,6 @@ describe("giving Feedback", () => {
   describe("once sent", () => {
     it("records one row with the Account and the time, and passes the issue's URL through", async () => {
       const { database, account } = await setUp();
-      const other = await addAccount(database, "other@example.test", "admin");
       const tracker = recordingTracker("https://github.com/trenddreamer/ship-it/issues/99");
       const before = Date.now();
 
@@ -199,10 +199,21 @@ describe("giving Feedback", () => {
       expect(rows).toEqual([
         { id: expect.any(Number), accountId: account.id, givenAt: expect.any(Date) },
       ]);
-      expect(account.id).not.toBe(other.id);
-      const givenAt = rows.map((row) => row.givenAt.getTime());
-      expect(Math.min(...givenAt)).toBeGreaterThanOrEqual(before - 1000);
-      expect(Math.max(...givenAt)).toBeLessThanOrEqual(Date.now() + 1000);
+      const givenAt = rows[0]!.givenAt.getTime();
+      expect(givenAt).toBeGreaterThanOrEqual(before - 1000);
+      expect(givenAt).toBeLessThanOrEqual(Date.now() + 1000);
+    });
+
+    it("records the Account that gave it, not another", async () => {
+      const { database, account } = await setUp();
+      const other = await addAccount(database, "other@example.test", "admin");
+      const input = { text: "Something is off here.", page, commit };
+
+      await giveFeedback(database, recordingTracker(), { ...input, account: other });
+      await giveFeedback(database, recordingTracker(), { ...input, account });
+
+      const rows = await feedbackRows(database);
+      expect(rows.map((row) => row.accountId)).toEqual([other.id, account.id]);
     });
 
     it("returns no URL when the tracker has none", async () => {
