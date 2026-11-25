@@ -1,5 +1,5 @@
 import { and, count, desc, eq, inArray } from "drizzle-orm";
-import { notifications } from "~/db/schema";
+import { accounts, notifications } from "~/db/schema";
 import type { DatabaseOrTransaction } from "./database";
 import { messageFor, type NewNotification, type NotificationKind } from "./kinds";
 
@@ -31,6 +31,22 @@ export async function sendNotification(
       sentAt: new Date(),
     })
     .run();
+}
+
+/**
+ * Puts a Notification in every Admin's Inbox, unread. Pass a transaction to
+ * send it in the same transaction as the change it reports.
+ */
+export async function notifyAdmins(
+  database: DatabaseOrTransaction,
+  notification: NewNotification,
+): Promise<void> {
+  const admins = await database
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(eq(accounts.kind, "admin"))
+    .all();
+  for (const admin of admins) await sendNotification(database, admin.id, notification);
 }
 
 /**

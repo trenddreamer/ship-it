@@ -3,4 +3,10 @@
 // unread count. To add a kind of Notification, see ./lib/kinds.ts.
 export type { DatabaseOrTransaction } from "./lib/database";
 export type { NewNotification, NotificationKind } from "./lib/kinds";
-export { countUnread, openInbox, sendNotification, type Notification } from "./lib/inbox";
+export {
+  countUnread,
+  notifyAdmins,
+  openInbox,
+  sendNotification,
+  type Notification,
+} from "./lib/inbox";
