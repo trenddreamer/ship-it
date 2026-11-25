@@ -7,17 +7,27 @@ import {
   ScrollRestoration,
 } from "react-router";
 
+import { useThemeChoice } from "~/components/theme-toggle";
+import { pageTheme } from "~/modules/theme";
+import { themeChoiceFromRequest } from "~/modules/theme/server";
 import type { Route } from "./+types/root";
 import "./app.css";
 
+// The theme the visitor picked, so the server renders the page in it and a
+// dark page never flashes light. The header's theme icon reads it too.
+export async function loader({ request }: Route.LoaderArgs) {
+  return { theme: await themeChoiceFromRequest(request) };
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
+  const { dataTheme, colorScheme } = pageTheme(useThemeChoice());
   return (
-    <html lang="en">
+    <html lang="en" data-theme={dataTheme}>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         {/* Lets the browser paint the dark background before the stylesheet loads. */}
-        <meta name="color-scheme" content="light dark" />
+        <meta name="color-scheme" content={colorScheme} />
         <Meta />
         <Links />
       </head>

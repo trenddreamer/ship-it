@@ -46,6 +46,20 @@
   color-scheme: light dark;
 }
 
+/*
+ * The theme toggle pins one scheme by setting `data-theme` on <html>. This
+ * has to be a rule here, not a style set from script: the build compiles
+ * `light-dark()` into variables that it only switches beside the
+ * `color-scheme` declarations it compiles. See docs/adr/0001.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 body {
   background-color: var(--color-surface);
   color: var(--color-ink);

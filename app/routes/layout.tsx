@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Form, Link, Outlet, useFetcher, useLocation, useMatches } from "react-router";
 import { currentAccount } from "~/accounts.server";
+import { ThemeToggle } from "~/components/theme-toggle";
 import { db } from "~/db/client.server";
 import { landingPath } from "~/modules/accounts/server";
 import { feedbackTextLength } from "~/modules/feedback";
@@ -8,8 +9,9 @@ import { countUnread } from "~/modules/notifications";
 import type { Route } from "./+types/layout";
 import type { action as feedbackAction } from "./feedback";
 
-// The layout every page sits in: a header with who is signed in and their
-// Inbox's unread count, and, for a signed-in Account, the Feedback button.
+// The layout every page sits in: a header with who is signed in, their
+// Inbox's unread count and the theme icon, and, for a signed-in Account, the
+// Feedback button.
 // Add things every signed-in page shows to this loader.
 export async function loader({ request }: Route.LoaderArgs) {
   const account = await currentAccount(request);
@@ -70,6 +72,7 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
               <Link to="/sign-up">Sign up</Link>
             </>
           )}
+          <ThemeToggle />
         </nav>
       </header>
       {account ? (
