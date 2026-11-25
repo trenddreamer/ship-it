@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { cancelSubscription, listCustomerSubscriptions } from "~/modules/subscriptions";
 import { addProduct, previewStop, stopSelling } from "../index";
 import { addVendor } from "./database";
-import { eggsWithSubscribers } from "./subscribed-eggs";
+import { eggsWithSubscriptions } from "./subscribed-eggs";
 
 describe("previewing a stop", () => {
   it("counts the active Subscriptions stopping a Product would cancel", async () => {
-    const { database, karoo, eggs, thandi } = await eggsWithSubscribers();
+    const { database, karoo, eggs, thandi } = await eggsWithSubscriptions();
     const [thandiEggs] = await listCustomerSubscriptions(database, thandi);
     await cancelSubscription(database, thandi, thandiEggs!.id, "2026-11-10");
 
@@ -16,7 +16,7 @@ describe("previewing a stop", () => {
   });
 
   it("counts only those on a Delivery Schedule when stopping it", async () => {
-    const { database, karoo, eggs } = await eggsWithSubscribers();
+    const { database, karoo, eggs } = await eggsWithSubscriptions();
     await addProduct(
       database,
       karoo,
@@ -39,7 +39,7 @@ describe("previewing a stop", () => {
   });
 
   it("previews stopping the Product when it is the last schedule", async () => {
-    const { database, karoo, eggs } = await eggsWithSubscribers();
+    const { database, karoo, eggs } = await eggsWithSubscriptions();
     await stopSelling(
       database,
       karoo,
@@ -53,7 +53,7 @@ describe("previewing a stop", () => {
   });
 
   it("finds nothing to stop that stopSelling would refuse", async () => {
-    const { database, karoo, eggs } = await eggsWithSubscribers();
+    const { database, karoo, eggs } = await eggsWithSubscriptions();
     const otherVendor = await addVendor(database, "Durban Spice Co.", "approved");
     const weekly = { productId: eggs, deliverySchedule: "weekly" } as const;
 

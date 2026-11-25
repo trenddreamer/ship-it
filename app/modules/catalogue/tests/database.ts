@@ -34,7 +34,7 @@ export async function addCustomer(database: MarketplaceDatabase, email: string):
 }
 
 /** Signs a Customer up and subscribes them weekly to a Product on `subscribedOn`. Returns their Account id. */
-export async function addSubscriber(
+export async function addSubscribedCustomer(
   database: MarketplaceDatabase,
   email: string,
   productId: number,

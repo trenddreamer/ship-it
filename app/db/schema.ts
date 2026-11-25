@@ -195,7 +195,7 @@ export const notifications = sqliteTable(
 );
 
 /**
- * One shipment of a Product to a Customer under a Subscription. It exists
+ * A Product sent to a Customer once under a Subscription. It exists
  * once it has fallen due, and records then the Price it will be charged, in
  * whole cents. Shipped once the Vendor marks it so. A Subscription has at most
  * one Delivery per due date.
@@ -220,7 +220,7 @@ export const deliveries = sqliteTable(
 /**
  * What a Customer pays for one shipped Delivery: the Price the Delivery
  * recorded, in whole cents, on the day it was marked shipped. A Delivery has
- * at most one Charge. Payments are simulated: a Charge never fails and is
+ * at most one Charge. Charges are simulated: a Charge never fails and is
  * never refunded, and the Vendor earns all of it.
  */
 export const charges = sqliteTable("charges", {

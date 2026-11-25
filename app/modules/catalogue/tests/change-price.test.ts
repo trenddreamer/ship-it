@@ -3,7 +3,7 @@ import { countUnread, openInbox } from "~/modules/notifications";
 import { cancelSubscription, listCustomerSubscriptions } from "~/modules/subscriptions";
 import { listApprovedVendors } from "~/modules/vendors";
 import { addProduct, changePrice, listVendorProducts, stopSelling } from "../index";
-import { addSubscriber, addVendor, freshDatabase } from "./database";
+import { addSubscribedCustomer, addVendor, freshDatabase } from "./database";
 
 const eggs = {
   name: "Free-range eggs (30)",
@@ -54,10 +54,20 @@ describe("changePrice", () => {
     expect(await listVendorProducts(database, karoo)).toMatchObject([{ priceCents: 15000 }]);
   });
 
-  it("notifies every active subscriber of the old Price, the new one and when it takes effect", async () => {
+  it("notifies every Customer subscribed to it of the old Price, the new one and when it takes effect", async () => {
     const { database, karoo, productId } = await karooEggs();
-    const thandi = await addSubscriber(database, "thandi@example.test", productId, "2026-11-02");
-    const sipho = await addSubscriber(database, "sipho@example.test", productId, "2026-11-03");
+    const thandi = await addSubscribedCustomer(
+      database,
+      "thandi@example.test",
+      productId,
+      "2026-11-02",
+    );
+    const sipho = await addSubscribedCustomer(
+      database,
+      "sipho@example.test",
+      productId,
+      "2026-11-03",
+    );
 
     await changePrice(database, karoo, { productId, priceCents: 16500 }, "2026-11-10");
 
@@ -72,7 +82,12 @@ describe("changePrice", () => {
 
   it("doesn't notify a Customer who cancelled", async () => {
     const { database, karoo, productId } = await karooEggs();
-    const thandi = await addSubscriber(database, "thandi@example.test", productId, "2026-11-02");
+    const thandi = await addSubscribedCustomer(
+      database,
+      "thandi@example.test",
+      productId,
+      "2026-11-02",
+    );
     const [subscription] = await listCustomerSubscriptions(database, thandi);
     await cancelSubscription(database, thandi, subscription!.id, "2026-11-05");
 
@@ -83,7 +98,12 @@ describe("changePrice", () => {
 
   it("refuses the Price the Product already has, notifying nobody", async () => {
     const { database, karoo, productId } = await karooEggs();
-    const thandi = await addSubscriber(database, "thandi@example.test", productId, "2026-11-02");
+    const thandi = await addSubscribedCustomer(
+      database,
+      "thandi@example.test",
+      productId,
+      "2026-11-02",
+    );
 
     expect(
       await changePrice(database, karoo, { productId, priceCents: 15000 }, "2026-11-10"),

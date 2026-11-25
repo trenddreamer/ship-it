@@ -61,9 +61,10 @@ export default function ChangePrice({ loaderData, actionData }: Route.ComponentP
     <main className="mx-auto max-w-md p-8">
       <h1 className="text-3xl font-semibold">Change the Price of {loaderData.name}</h1>
       <p className="mt-2 text-gray-600">
-        It costs {loaderData.price} per Delivery now. New subscribers pay the new Price straight
-        away. Your current subscribers are told, and keep the current Price for Deliveries due in
-        the next 7 days. <Link to="/vendor">Back to your Products</Link>.
+        The Price is {loaderData.price} per Delivery now. Customers who subscribe from now on pay
+        the new Price straight away. Customers already subscribed are told, and keep the current
+        Price for Deliveries due in the next 7 days. <Link to="/vendor">Back to your Products</Link>
+        .
       </p>
       <Form method="post" className="mt-6 space-y-4">
         <FormError message={actionData?.formError} />

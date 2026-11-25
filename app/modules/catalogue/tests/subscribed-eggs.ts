@@ -4,7 +4,7 @@ import { subscribe } from "~/modules/subscriptions";
 import { addProduct } from "../index";
 import { addCustomer, addVendor, freshDatabase } from "./database";
 
-export async function eggsWithSubscribers() {
+export async function eggsWithSubscriptions() {
   const database = await freshDatabase();
   const karoo = await addVendor(database, "Karoo Farm", "approved");
   const eggs = await addProduct(

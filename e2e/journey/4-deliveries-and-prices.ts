@@ -55,7 +55,7 @@ export function deliveryAndPriceSteps() {
     await expect(charges).toContainText(`Charged ${johannesburgDay(0)}R 65,50`);
   });
 
-  test("the Vendor changes the chai's Price; its subscribers are told when it takes effect", async ({
+  test("the Vendor changes the chai's Price; its Customers are told when it takes effect", async ({
     page,
   }) => {
     // The seeded Customer subscribes weekly first, so their next Delivery falls due tomorrow.
@@ -86,7 +86,7 @@ export function deliveryAndPriceSteps() {
     await expect(products.getByRole("listitem").filter({ hasText: chai })).toContainText("R 72,00");
     await signOut(page);
 
-    // New subscribers see the new Price straight away.
+    // Customers who subscribe now see the new Price straight away.
     await page.goto("/");
     await expect(vendorCard(page, "Cederberg Rooibos")).toContainText("R 72,00");
 

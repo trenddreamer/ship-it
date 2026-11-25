@@ -10,17 +10,17 @@ import {
  * Sends a Notification to every Customer with an active Subscription to a
  * Product. Pass the caller's `tx` so it is sent in the same transaction.
  */
-export async function notifySubscribers(
+export async function notifySubscribedCustomers(
   database: DatabaseOrTransaction,
   productId: number,
   notification: NewNotification,
 ): Promise<void> {
-  const subscribers = await database
+  const subscribed = await database
     .select({ customerId: subscriptions.accountId })
     .from(subscriptions)
     .where(and(eq(subscriptions.productId, productId), isNull(subscriptions.cancelledOn)))
     .all();
-  for (const { customerId } of subscribers) {
+  for (const { customerId } of subscribed) {
     await sendNotification(database, customerId, notification);
   }
 }

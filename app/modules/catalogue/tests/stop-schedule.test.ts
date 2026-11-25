@@ -9,11 +9,11 @@ import {
 import { listApprovedVendors } from "~/modules/vendors";
 import { addProduct, listVendorProducts, stopSelling } from "../index";
 import { addCustomer, addVendor } from "./database";
-import { eggsWithSubscribers } from "./subscribed-eggs";
+import { eggsWithSubscriptions } from "./subscribed-eggs";
 
 describe("stopping a Delivery Schedule", () => {
   it("cancels only the active Subscriptions on that schedule", async () => {
-    const { database, karoo, eggs, thandi, sipho } = await eggsWithSubscribers();
+    const { database, karoo, eggs, thandi, sipho } = await eggsWithSubscriptions();
 
     const result = await stopSelling(
       database,
@@ -32,7 +32,7 @@ describe("stopping a Delivery Schedule", () => {
   });
 
   it("tells the Customer the Vendor cancelled their Subscription, and why", async () => {
-    const { database, karoo, eggs, thandi, sipho } = await eggsWithSubscribers();
+    const { database, karoo, eggs, thandi, sipho } = await eggsWithSubscriptions();
 
     await stopSelling(
       database,
@@ -48,7 +48,7 @@ describe("stopping a Delivery Schedule", () => {
   });
 
   it("keeps the Product on sale, without that schedule to subscribe or switch to", async () => {
-    const { database, karoo, eggs, sipho } = await eggsWithSubscribers();
+    const { database, karoo, eggs, sipho } = await eggsWithSubscriptions();
     const lerato = await addCustomer(database, "lerato@example.test");
 
     await stopSelling(
@@ -88,7 +88,7 @@ describe("stopping a Delivery Schedule", () => {
   });
 
   it("is final: stopping it again is refused", async () => {
-    const { database, karoo, eggs } = await eggsWithSubscribers();
+    const { database, karoo, eggs } = await eggsWithSubscriptions();
     const weekly = { productId: eggs, deliverySchedule: "weekly" } as const;
     await stopSelling(database, karoo, weekly, "2026-11-20");
 
@@ -99,7 +99,7 @@ describe("stopping a Delivery Schedule", () => {
   });
 
   it("is refused for a schedule the Product doesn't offer", async () => {
-    const { database, karoo, eggs } = await eggsWithSubscribers();
+    const { database, karoo, eggs } = await eggsWithSubscriptions();
 
     const result = await stopSelling(
       database,
@@ -115,7 +115,7 @@ describe("stopping a Delivery Schedule", () => {
   });
 
   it("is refused for another Vendor's Product", async () => {
-    const { database, eggs, thandi } = await eggsWithSubscribers();
+    const { database, eggs, thandi } = await eggsWithSubscriptions();
     const otherVendor = await addVendor(database, "Durban Spice Co.", "approved");
 
     const result = await stopSelling(
@@ -132,7 +132,7 @@ describe("stopping a Delivery Schedule", () => {
   });
 
   it("stops the Product when it is the last schedule, so it never has none", async () => {
-    const database = (await eggsWithSubscribers()).database;
+    const database = (await eggsWithSubscriptions()).database;
     const karoo = await addVendor(database, "Karoo Lamb", "approved");
     const lamb = await addProduct(
       database,

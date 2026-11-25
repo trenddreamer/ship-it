@@ -2,10 +2,10 @@ import { and, eq, isNull } from "drizzle-orm";
 import { priceChanges, products, vendors } from "~/db/schema";
 import { addDays, formatCalendarDate, type CalendarDate } from "~/modules/calendar";
 import { formatPrice } from "~/modules/price";
-import { notifySubscribers } from "~/modules/subscriptions";
+import { notifySubscribedCustomers } from "~/modules/subscriptions";
 import type { MarketplaceDatabase } from "~/db/database";
 
-/** How long existing subscribers keep the old Price after a change. */
+/** How long Customers already subscribed keep the old Price after a change. */
 const noticePeriodDays = 7;
 
 /** A new Price for one of the Vendor's Products. */
@@ -22,12 +22,13 @@ export type ChangePriceResult =
 export type ChangePriceRefusal = "product-not-found" | "same-price";
 
 /**
- * Changes the Price of one of the Vendor's Products, `today`. New subscribers
- * and the home page get it at once; the change is kept in the Product's Price
- * history, and it takes effect for existing subscribers 7 days later (the
- * Notice Period). Refused for a Product that isn't the Vendor's or that it stopped selling, and for the
- * Price it already has. Every Customer with an active Subscription to the Product
- * is notified in the same transaction.
+ * Changes the Price of one of the Vendor's Products, `today`. New
+ * Subscriptions and the home page get it at once; the change is kept in the
+ * Product's Price history, and it takes effect for existing Subscriptions 7
+ * days later (the Notice Period). Refused for a Product that isn't the
+ * Vendor's or that it stopped selling, and for the Price it already has.
+ * Every Customer with an active Subscription to the Product is notified in
+ * the same transaction.
  */
 export async function changePrice(
   database: MarketplaceDatabase,
@@ -60,7 +61,7 @@ export async function changePrice(
       .values({ productId: change.productId, priceCents: change.priceCents, changedOn: today })
       .run();
     const takesEffectOn = addDays(today, noticePeriodDays);
-    await notifySubscribers(tx, change.productId, {
+    await notifySubscribedCustomers(tx, change.productId, {
       kind: "price-changed",
       vendorName: product.vendorName,
       productName: product.name,

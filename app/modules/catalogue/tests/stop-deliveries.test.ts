@@ -3,12 +3,12 @@ import { listCustomerCharges } from "~/modules/charges";
 import { createDueDeliveries, listVendorDueDeliveries, shipDelivery } from "~/modules/deliveries";
 import type { VendorStop } from "~/modules/subscriptions";
 import { stopSelling } from "../index";
-import { eggsWithSubscribers } from "./subscribed-eggs";
+import { eggsWithSubscriptions } from "./subscribed-eggs";
 
 // Thandi gets eggs weekly and Sipho monthly, both from 1 November 2026: Thandi's
 // fall due 2, 9, 16, 23 November..., Sipho's 2 November, 2 December...
 async function dueAfterStopping(stop: (eggs: number) => VendorStop) {
-  const { database, karoo, eggs } = await eggsWithSubscribers();
+  const { database, karoo, eggs } = await eggsWithSubscriptions();
   await createDueDeliveries(database, "2026-11-10");
 
   await stopSelling(database, karoo, stop(eggs), "2026-11-20");
@@ -42,7 +42,7 @@ describe("Deliveries when a Vendor stops", () => {
   });
 
   it("can still be shipped and charged once the Product stopped", async () => {
-    const { database, karoo, eggs, thandi } = await eggsWithSubscribers();
+    const { database, karoo, eggs, thandi } = await eggsWithSubscriptions();
     await createDueDeliveries(database, "2026-11-10");
     await stopSelling(database, karoo, { productId: eggs, deliverySchedule: null }, "2026-11-20");
 

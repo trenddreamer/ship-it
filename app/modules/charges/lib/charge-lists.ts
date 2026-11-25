@@ -41,7 +41,7 @@ export async function listCustomerCharges(
   return rows.map((charge) => ({ ...charge, amount: formatPrice(charge.amountCents) }));
 }
 
-/** A Charge as the Vendor who earned it sees it (the whole amount: no Marketplace fee). */
+/** A Charge as the Vendor who earned it sees it (the whole amount: the Marketplace keeps none of it). */
 export interface VendorCharge {
   id: number;
   productName: string;

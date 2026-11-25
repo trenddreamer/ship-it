@@ -1,6 +1,6 @@
 // Entry point: the catalogue. The Products Vendors sell, their Price and
 // the Delivery Schedules each one offers. A Vendor changes a Price; each change
-// is kept, dated, and existing subscribers are notified.
+// is kept, dated, and Customers already subscribed are notified.
 export {
   addProduct,
   listVendorProducts,
