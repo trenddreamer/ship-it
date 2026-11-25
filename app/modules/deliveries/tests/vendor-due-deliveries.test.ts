@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDueDeliveries, listVendorDueDeliveries } from "../index";
+import { createDueDeliveries, listVendorDueDeliveries, shipDelivery } from "../index";
 import {
   addCustomer,
   addSubscription,
@@ -7,7 +7,6 @@ import {
   addVendorProduct,
   freshDatabase,
   homeAddress,
-  markShipped,
 } from "./database";
 
 describe("a Vendor's due Deliveries", () => {
@@ -75,7 +74,7 @@ describe("a Vendor's due Deliveries", () => {
     await createDueDeliveries(database, "2026-11-09");
     const [first] = await listVendorDueDeliveries(database, karoo);
 
-    await markShipped(database, first!.id, "2026-11-09");
+    await shipDelivery(database, karoo, first!.id, "2026-11-09");
 
     expect(await listVendorDueDeliveries(database, karoo)).toMatchObject([{ dueOn: "2026-11-09" }]);
   });

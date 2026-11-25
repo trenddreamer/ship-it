@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0cdf071b-fe71-443a-ac8d-d84be4cd5272",
+  "id": "26b6cbcd-c6ad-4987-85b1-e1a684782d54",
   "prevId": "998921b7-1829-43e6-83a4-d4ed9a88075b",
   "tables": {
     "accounts": {
@@ -82,6 +82,66 @@
           "value": "(\"accounts\".\"kind\" = 'vendor') = (\"accounts\".\"vendor_id\" is not null)"
         }
       }
+    },
+    "charges": {
+      "name": "charges",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "delivery_id": {
+          "name": "delivery_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount_cents": {
+          "name": "amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "charged_on": {
+          "name": "charged_on",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "charges_delivery_id_unique": {
+          "name": "charges_delivery_id_unique",
+          "columns": [
+            "delivery_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "charges_delivery_id_deliveries_id_fk": {
+          "name": "charges_delivery_id_deliveries_id_fk",
+          "tableFrom": "charges",
+          "tableTo": "deliveries",
+          "columnsFrom": [
+            "delivery_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     },
     "deliveries": {
       "name": "deliveries",
@@ -368,13 +428,6 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false
-        },
-        "stopped_on": {
-          "name": "stopped_on",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         }
       },

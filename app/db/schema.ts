@@ -187,3 +187,20 @@ export const deliveries = sqliteTable(
   },
   (table) => [uniqueIndex("deliveries_one_per_due_date").on(table.subscriptionId, table.dueOn)],
 );
+
+/**
+ * What a Customer pays for one shipped Delivery: the Price the Delivery
+ * recorded, in whole cents, on the day it was marked shipped. A Delivery has
+ * at most one Charge. Payments are simulated: a Charge never fails and is
+ * never refunded, and the Vendor earns all of it.
+ */
+export const charges = sqliteTable("charges", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  deliveryId: integer("delivery_id")
+    .notNull()
+    .unique()
+    .references(() => deliveries.id, { onDelete: "cascade" }),
+  amountCents: integer("amount_cents").notNull(),
+  /** The day the Delivery was marked shipped, "YYYY-MM-DD" in Africa/Johannesburg. */
+  chargedOn: text("charged_on").notNull(),
+});

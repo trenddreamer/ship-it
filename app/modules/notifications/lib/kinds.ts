@@ -48,6 +48,20 @@ const kinds = {
     scheduleLabel: string;
   }) =>
     `${vendorName} cancelled your Subscription to ${productName}: it stopped delivering it ${scheduleLabel.toLowerCase()}.`,
+  /** To a Customer, when a Vendor marks one of their Deliveries shipped (and charges it). */
+  "delivery-shipped": ({
+    vendorName,
+    productName,
+    dueOn,
+    amount,
+  }: {
+    vendorName: string;
+    productName: string;
+    /** The day it fell due, as shown to people, e.g. "2 November 2026". */
+    dueOn: string;
+    /** The Charge's amount, formatted with `formatPrice`. */
+    amount: string;
+  }) => `${vendorName} shipped your ${productName}, due ${dueOn}. You were charged ${amount}.`,
 };
 
 type Kinds = typeof kinds;

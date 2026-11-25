@@ -82,6 +82,21 @@ export async function runDueDeliveriesJob(
   });
 }
 
+/**
+ * On the Vendor page, the signed-in Vendor marks the due Delivery of
+ * `productName` to `customerEmail` shipped, today, and waits for it to leave
+ * "Deliveries due". That charges the Customer and notifies them.
+ */
+export async function markShipped(page: Page, productName: string, customerEmail: string) {
+  await page.goto("/vendor");
+  const button = page.getByRole("button", {
+    name: `Mark ${productName} for ${customerEmail} shipped`,
+  });
+  await expect(button).toHaveCount(1);
+  await button.click();
+  await expect(button).toHaveCount(0);
+}
+
 /** Adds a Product from the Vendor page through the new-Product form. */
 export async function addProduct(
   page: Page,
