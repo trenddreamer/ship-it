@@ -19,7 +19,8 @@ const openedIssue = z.object({ html_url: z.string() });
 /**
  * A Tracker that opens a real GitHub issue through the REST API, with its
  * labels applied in the same call, and returns the issue's URL. It throws,
- * with GitHub's status and answer, when GitHub doesn't open it.
+ * with GitHub's status and answer, when GitHub doesn't open it, and with
+ * the cause when GitHub can't be reached.
  */
 export function githubTracker({
   token,
@@ -38,6 +39,10 @@ export function githubTracker({
           "User-Agent": "feedback-tracker",
         },
         body: JSON.stringify({ title, body, labels }),
+      }).catch((error: unknown) => {
+        throw new Error(`GitHub couldn't be reached to open the issue in ${repo}: ${error}`, {
+          cause: error,
+        });
       });
       if (!response.ok) {
         throw new Error(

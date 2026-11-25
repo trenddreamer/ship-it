@@ -125,18 +125,20 @@ describe("the GitHub tracker", () => {
     },
   );
 
-  it("fails and records nothing when the network fails", async () => {
+  it("fails, records nothing, and logs the repo and the cause when the network fails", async () => {
+    const cause = new TypeError("fetch failed");
     const fetch = vi.fn<typeof globalThis.fetch>(async () => {
-      throw new TypeError("fetch failed");
+      throw cause;
     });
 
     const { database, result } = await send(fetch);
 
     expect(result).toEqual({ kind: "failed" });
     expect(await feedbackRows(database)).toEqual([]);
-    expect(console.error).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({ message: "fetch failed" }),
+    const [, error] = vi.mocked(console.error).mock.calls[0]!;
+    expect((error as Error).message).toBe(
+      `GitHub couldn't be reached to open the issue in ${repo}: TypeError: fetch failed`,
     );
+    expect((error as Error).cause).toBe(cause);
   });
 });
