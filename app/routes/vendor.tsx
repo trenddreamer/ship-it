@@ -137,6 +137,13 @@ export default function VendorPage({ loaderData, actionData }: Route.ComponentPr
                 <p className="shrink-0 text-right">
                   <span className="font-semibold">{product.price}</span>
                   <span className="block text-xs text-gray-500">per Delivery</span>
+                  <Link
+                    to={`/vendor/products/${product.id}/price`}
+                    aria-label={`Change the Price of ${product.name}`}
+                    className="text-sm underline"
+                  >
+                    Change Price
+                  </Link>
                 </p>
               </li>
             ))}

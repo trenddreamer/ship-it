@@ -22,3 +22,4 @@ export {
   type ChangePriceResult,
   type PriceChange,
 } from "./lib/change-price";
+export { changePriceSchema } from "./lib/change-price-schema";

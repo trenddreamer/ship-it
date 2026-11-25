@@ -10,6 +10,7 @@ export default [
     route("vendor", "routes/vendor.tsx"),
     route("vendor/products/new", "routes/vendor-products-new.tsx"),
     route("vendor/products/:productId/stop", "routes/vendor-products-stop.tsx"),
+    route("vendor/products/:productId/price", "routes/vendor-products-price.tsx"),
     route("admin", "routes/admin.tsx"),
     route("inbox", "routes/inbox.tsx"),
     route("delivery-address", "routes/delivery-address.tsx"),
