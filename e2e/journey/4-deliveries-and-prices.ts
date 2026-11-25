@@ -128,4 +128,22 @@ export function deliveryAndPriceSteps() {
     await expect(due).toContainText(`Due ${johannesburgDay(8)}`);
     await expect(due).toContainText("R 72,00");
   });
+
+  test("the Vendor offers the chai on another Delivery Schedule", async ({ page }) => {
+    await signIn(page, rooibosVendor);
+    const listed = page
+      .getByRole("region", { name: "Your Products" })
+      .getByRole("listitem")
+      .filter({ hasText: chai });
+    await listed
+      .getByLabel(`Delivery Schedule to offer for ${chai}`)
+      .selectOption("Every two weeks");
+    await listed
+      .getByRole("button", { name: `Offer another Delivery Schedule for ${chai}` })
+      .click();
+    await expect(page).toHaveURL(/\/vendor$/);
+    await expect(listed).toContainText("Weekly, Every two weeks, Monthly");
+    // It offers every schedule now, so there is none left to offer.
+    await expect(listed.getByLabel(`Delivery Schedule to offer for ${chai}`)).toHaveCount(0);
+  });
 }
