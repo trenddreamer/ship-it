@@ -23,7 +23,8 @@ export async function catchUpSubscription(
     .where(eq(subscriptions.id, subscriptionId))
     .all();
   if (!subscription) return;
-  const lastDay = today;
+  const { cancelledOn } = subscription;
+  const lastDay = cancelledOn !== null && cancelledOn < today ? cancelledOn : today;
   const firstDueOn = addDays(subscription.scheduleStartsOn, 1);
   let dueOn = subscription.nextDueOn;
   while (dueOn <= lastDay) {

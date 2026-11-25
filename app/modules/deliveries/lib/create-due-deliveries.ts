@@ -1,4 +1,4 @@
-import { lte } from "drizzle-orm";
+import { and, isNull, lte, or } from "drizzle-orm";
 import { subscriptions } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
 import type { MarketplaceDatabase } from "~/modules/vendors";
@@ -19,7 +19,16 @@ export async function createDueDeliveries(
   const due = await database
     .select({ id: subscriptions.id })
     .from(subscriptions)
-    .where(lte(subscriptions.nextDueOn, today))
+    .where(
+      and(
+        lte(subscriptions.nextDueOn, today),
+        // Stryker disable next-line ConditionalExpression: equivalent, it only skips cancelled Subscriptions with nothing left to catch up
+        or(
+          isNull(subscriptions.cancelledOn),
+          lte(subscriptions.nextDueOn, subscriptions.cancelledOn),
+        ),
+      ),
+    )
     .all();
   for (const { id } of due) {
     await database.transaction((tx) => catchUpSubscription(tx, id, today));

@@ -73,6 +73,22 @@ export async function addVendorProduct(
   return product.id;
 }
 
+/**
+ * Changes a Product's Price in place. No module changes a Price yet (#16
+ * will); until then this stands in for it.
+ */
+export async function setPrice(
+  database: MarketplaceDatabase,
+  productId: number,
+  priceCents: number,
+): Promise<void> {
+  await database
+    .update(schema.products)
+    .set({ priceCents })
+    .where(eq(schema.products.id, productId))
+    .run();
+}
+
 /** Subscribes a Customer to a Product on `subscribedOn`. Returns the Subscription's id. */
 export async function addSubscription(
   database: MarketplaceDatabase,
