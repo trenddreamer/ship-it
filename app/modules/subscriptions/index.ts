@@ -8,5 +8,11 @@ export {
   type SubscribeRefusal,
   type SubscribeResult,
 } from "./lib/subscribe";
+export { subscribeSchema } from "./lib/subscribe-schema";
 export { listCustomerSubscriptions, type CustomerSubscription } from "./lib/customer-subscriptions";
 export { findSubscribableProduct, type SubscribableProduct } from "./lib/subscribable-product";
+export {
+  listVendorSubscriptions,
+  type ProductSubscriptions,
+  type VendorSubscription,
+} from "./lib/vendor-subscriptions";
