@@ -295,6 +295,19 @@ jobs:
           claude plugin marketplace add anthropics/claude-plugins-official
           claude plugin install mattpocock-skills@claude-plugins-official
 
+      - name: Cache agent-browser's Chrome
+        uses: actions/cache@v4
+        with:
+          path: ~/.agent-browser/browsers
+          key: agent-browser-0.27.0-${{ runner.os }}
+
+      - name: Install agent-browser
+        # The agent drives the app with it for screenshots and checks. Without
+        # it here, each run installs it mid-session.
+        run: |
+          npm install -g agent-browser@0.27.0
+          agent-browser install
+
       - name: Decompose the spec into a queue
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -406,6 +419,19 @@ jobs:
         run: |
           claude plugin marketplace add anthropics/claude-plugins-official
           claude plugin install mattpocock-skills@claude-plugins-official
+
+      - name: Cache agent-browser's Chrome
+        uses: actions/cache@v4
+        with:
+          path: ~/.agent-browser/browsers
+          key: agent-browser-0.27.0-${{ runner.os }}
+
+      - name: Install agent-browser
+        # The agent drives the app with it for screenshots and checks. Without
+        # it here, each run installs it mid-session.
+        run: |
+          npm install -g agent-browser@0.27.0
+          agent-browser install
 
       - name: Migrate and seed the database
         run: |

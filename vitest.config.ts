@@ -5,7 +5,7 @@ export default defineConfig({
   // `~/` is app/, from the paths in tsconfig.json.
   resolve: { tsconfigPaths: true },
   test: {
-    include: ["app/**/*.test.{ts,tsx}"],
+    include: ["app/**/*.test.{ts,tsx}", ".sandcastle/**/*.test.ts"],
     environment: "node",
   },
 });
