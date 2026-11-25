@@ -2,5 +2,5 @@
 // Price it recorded, dated the day it was marked shipped (Deliveries calls
 // `chargeDelivery` inside its shipping transaction). Customers and Vendors
 // each see their Charges, newest first. Payments are simulated.
-export { chargeDelivery } from "./lib/charge-delivery";
+export { chargeDelivery, type NewCharge } from "./lib/charge-delivery";
 export { listCustomerCharges, type CustomerCharge } from "./lib/charge-lists";

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listCustomerCharges } from "~/modules/charges";
+import { openInbox } from "~/modules/notifications";
+import { cancelSubscription, listCustomerSubscriptions } from "~/modules/subscriptions";
 import { createDueDeliveries, listVendorDueDeliveries, shipDelivery } from "../index";
 import {
   addCustomer,
@@ -35,6 +37,33 @@ describe("shipping a Delivery", () => {
         amount: "R 99,50",
         chargedOn: "2026-11-04",
       },
+    ]);
+  });
+
+  it("notifies the Customer that it shipped", async () => {
+    const { database, karoo, thandi, delivery } = await karooWithDueEggs();
+
+    await shipDelivery(database, karoo, delivery.id, "2026-11-04");
+
+    expect(await openInbox(database, thandi)).toMatchObject([
+      {
+        kind: "delivery-shipped",
+        message:
+          "Karoo Farm shipped your Free-range eggs, due 2 November 2026. You were charged R 99,50.",
+        unread: true,
+      },
+    ]);
+  });
+
+  it("still ships and charges a Delivery that fell due before its Subscription was cancelled", async () => {
+    const { database, karoo, thandi, delivery } = await karooWithDueEggs();
+    const [subscription] = await listCustomerSubscriptions(database, thandi);
+    await cancelSubscription(database, thandi, subscription!.id, "2026-11-03");
+
+    expect(await shipDelivery(database, karoo, delivery.id, "2026-11-04")).toEqual({ ok: true });
+
+    expect(await listCustomerCharges(database, thandi)).toMatchObject([
+      { productName: "Free-range eggs", amountCents: 9950, chargedOn: "2026-11-04" },
     ]);
   });
 
