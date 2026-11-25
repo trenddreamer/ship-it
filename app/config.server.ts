@@ -1,6 +1,6 @@
-// Configuration from the environment. Every value has a local default, so
-// local development, the checks and the journey need no configuration.
-// Set them all in production.
+// Configuration from the environment. Every value has a local default (or,
+// for Feedback's token, works without one), so local development, the checks
+// and the journey need no configuration. Set them all in production.
 //
 // - SESSION_SECRET: signs the session cookie.
 // - SESSION_COOKIE_SECURE: "true" to send the session cookie over HTTPS only.
@@ -12,6 +12,15 @@
 //   NODE_ENV=production. Only the journey sets it (its server is a production
 //   build). Outside production the route always accepts one; on a Vercel
 //   production deployment (VERCEL_ENV=production) never.
+// - FEEDBACK_GITHUB_TOKEN: when set, Feedback opens a real GitHub issue,
+//   labelled `agent:explore` and `feedback`; when not, it is only logged to
+//   the server console. No default and no warning. Locally it can be any
+//   token with Issues: write on the repo. Production needs its own scoped
+//   token (see the Before production issue). Actions' built-in GITHUB_TOKEN
+//   won't work: labels it applies don't start workflows, so `agent:explore`
+//   would never start a run.
+// - FEEDBACK_GITHUB_REPO: the repo Feedback issues open in, as `owner/name`.
+//   Defaults to `trenddreamer/ship-it`.
 
 const defaults = {
   SESSION_SECRET: "ship-it-local-session-secret",
@@ -41,5 +50,9 @@ export const config = {
     acceptsToday:
       process.env.VERCEL_ENV !== "production" &&
       (process.env.NODE_ENV !== "production" || process.env.ACCEPT_JOB_TODAY === "true"),
+  },
+  feedback: {
+    githubToken: process.env.FEEDBACK_GITHUB_TOKEN || undefined,
+    githubRepo: process.env.FEEDBACK_GITHUB_REPO || "trenddreamer/ship-it",
   },
 };

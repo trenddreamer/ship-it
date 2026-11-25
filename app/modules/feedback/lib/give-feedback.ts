@@ -2,10 +2,10 @@ import { feedback } from "~/db/schema";
 import type { MarketplaceDatabase } from "~/db/database";
 import type { Account } from "~/modules/accounts";
 import { feedbackIssue } from "./issue";
+import { feedbackTextLength } from "./text-length";
 import type { Tracker } from "./tracker";
 
-const minLength = 10;
-const maxLength = 2000;
+const { min: minLength, max: maxLength } = feedbackTextLength;
 
 export type GiveFeedback = {
   /** The signed-in Account giving it. */

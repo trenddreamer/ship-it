@@ -19,5 +19,6 @@ export default [
     route("subscriptions", "routes/subscriptions.tsx"),
     route("charges", "routes/charges.tsx"),
   ]),
+  route("feedback", "routes/feedback.ts"),
   route("jobs/create-due-deliveries", "routes/jobs.create-due-deliveries.ts"),
 ] satisfies RouteConfig;
