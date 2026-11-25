@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { productIdSchema } from "./product-params-schema";
 import { deliverySchedules } from "~/db/schema";
 import type { VendorStop } from "~/modules/subscriptions";
 
@@ -9,7 +10,7 @@ import type { VendorStop } from "~/modules/subscriptions";
  */
 export const stopSchema = z
   .object({
-    productId: z.coerce.number().int().positive(),
+    productId: productIdSchema,
     schedule: z.union([z.literal(""), z.enum(deliverySchedules)]).optional(),
   })
   .transform(({ productId, schedule }): VendorStop => ({

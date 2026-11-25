@@ -84,10 +84,38 @@ export async function listVendorProducts(
   database: MarketplaceDatabase,
   vendorId: number,
 ): Promise<CatalogueProduct[]> {
+  return vendorProducts(database, vendorId);
+}
+
+/**
+ * One of the Vendor's Products, as `listVendorProducts` shows it, or null
+ * when it isn't the Vendor's, doesn't exist or was stopped.
+ */
+export async function findVendorProduct(
+  database: MarketplaceDatabase,
+  vendorId: number,
+  productId: number,
+): Promise<CatalogueProduct | null> {
+  const [product] = await vendorProducts(database, vendorId, productId);
+  return product ?? null;
+}
+
+/** The Vendor's Products it still sells, by name; only `productId` when given. */
+async function vendorProducts(
+  database: MarketplaceDatabase,
+  vendorId: number,
+  productId?: number,
+): Promise<CatalogueProduct[]> {
   const rows = await database
     .select()
     .from(products)
-    .where(and(eq(products.vendorId, vendorId), isNull(products.stoppedOn)))
+    .where(
+      and(
+        eq(products.vendorId, vendorId),
+        isNull(products.stoppedOn),
+        productId === undefined ? undefined : eq(products.id, productId),
+      ),
+    )
     .orderBy(asc(products.name), asc(products.id))
     .all();
   const offered = await schedulesByProduct(

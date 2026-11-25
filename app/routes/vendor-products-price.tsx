@@ -3,7 +3,12 @@ import { z } from "zod";
 import { requireActingVendor } from "~/accounts.server";
 import { FormError, TextField } from "~/components/text-field";
 import { db } from "~/db/client.server";
-import { changePrice, changePriceSchema, listVendorProducts } from "~/modules/catalogue";
+import {
+  changePrice,
+  changePriceSchema,
+  findVendorProduct,
+  productParamsSchema,
+} from "~/modules/catalogue";
 import { today } from "~/today.server";
 import type { Route } from "./+types/vendor-products-price";
 
@@ -17,8 +22,9 @@ function notFound(): never {
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const account = await requireActingVendor(request);
-  const products = await listVendorProducts(db, account.vendorId);
-  const product = products.find((p) => String(p.id) === params.productId);
+  const parsed = productParamsSchema.safeParse(params);
+  if (!parsed.success) notFound();
+  const product = await findVendorProduct(db, account.vendorId, parsed.data.productId);
   if (!product) notFound();
   return { name: product.name, price: product.price };
 }

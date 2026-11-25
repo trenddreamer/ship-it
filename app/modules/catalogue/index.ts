@@ -3,11 +3,13 @@
 // is kept, dated, and Customers already subscribed are notified.
 export {
   addProduct,
+  findVendorProduct,
   listVendorProducts,
   type CatalogueProduct,
   type NewProduct,
 } from "./lib/products";
 export { newProductSchema } from "./lib/new-product-schema";
+export { productParamsSchema } from "./lib/product-params-schema";
 export {
   previewStop,
   stopSelling,

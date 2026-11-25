@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { productIdSchema } from "./product-params-schema";
 import { priceInputSchema } from "~/modules/price";
 import type { PriceChange } from "./change-price";
 
@@ -8,7 +9,7 @@ import type { PriceChange } from "./change-price";
  */
 export const changePriceSchema = z
   .object({
-    productId: z.coerce.number().int().positive(),
+    productId: productIdSchema,
     price: priceInputSchema,
   })
   .transform(({ productId, price }): PriceChange => ({ productId, priceCents: price }));
