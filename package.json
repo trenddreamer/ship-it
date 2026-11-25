@@ -6,7 +6,7 @@
     "node": ">=22.22"
   },
   "scripts": {
-    "typecheck": "react-router typegen && tsc --noEmit && tsc -p .sandcastle/agent-workflows --noEmit",
+    "typecheck": "react-router typegen && tsc --noEmit && tsc -p .sandcastle/agent-workflows --noEmit && tsc -p e2e --noEmit",
     "test": "vitest run",
     "lint": "oxlint --deny-warnings",
     "lint:boundaries": "depcruise app",
@@ -21,10 +21,12 @@
     "db:migrate": "tsx app/db/migrate.ts",
     "db:seed": "tsx app/db/seed.ts",
     "db:reset": "tsx app/db/reset.ts && npm run db:migrate && npm run db:seed",
-    "test:mutation": "stryker run"
+    "test:mutation": "stryker run",
+    "test:journey": "npm run build && tsx e2e/run.ts"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.14.0",
+    "@playwright/test": "^1.65.1",
     "@react-router/dev": "^8.5.2",
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/typescript-checker": "^10.1.1",

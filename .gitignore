@@ -5,3 +5,5 @@ node_modules/
 .env
 /reports/
 /.stryker-tmp/
+/test-results/
+/playwright-report/
