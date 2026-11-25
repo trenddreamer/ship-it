@@ -36,6 +36,7 @@ describe("subscribing", () => {
         priceCents: 15050,
         price: "R\u00a0150,50",
         nextDueOn: "2026-11-26",
+        cancelledOn: null,
       },
     ]);
   });

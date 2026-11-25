@@ -1,10 +1,10 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { products, subscriptions, vendors, type DeliverySchedule } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
 import { formatPrice } from "~/modules/price";
 import type { MarketplaceDatabase } from "~/modules/vendors";
 
-/** One of a Customer's active Subscriptions, as they see it. */
+/** One of a Customer's Subscriptions, active or cancelled, as they see it. */
 export interface CustomerSubscription {
   id: number;
   productName: string;
@@ -14,13 +14,16 @@ export interface CustomerSubscription {
   priceCents: number;
   /** The Price formatted for display, e.g. "R 150,00". */
   price: string;
-  /** The day the next Delivery is due. */
-  nextDueOn: CalendarDate;
+  /** The day the next Delivery is due; null once cancelled. */
+  nextDueOn: CalendarDate | null;
+  /** The day it was cancelled; null while it is active. */
+  cancelledOn: CalendarDate | null;
 }
 
 /**
- * A Customer's active Subscriptions, ordered by Product name, each with its
- * Product, Vendor, Delivery Schedule, Price and next due date.
+ * A Customer's Subscriptions, each with its Product, Vendor, Delivery
+ * Schedule, Price, and next due date or cancellation date. Active ones come
+ * first, by Product name; then cancelled ones, most recently cancelled first.
  */
 export async function listCustomerSubscriptions(
   database: MarketplaceDatabase,
@@ -34,12 +37,22 @@ export async function listCustomerSubscriptions(
       deliverySchedule: subscriptions.deliverySchedule,
       priceCents: products.priceCents,
       nextDueOn: subscriptions.nextDueOn,
+      cancelledOn: subscriptions.cancelledOn,
     })
     .from(subscriptions)
     .innerJoin(products, eq(products.id, subscriptions.productId))
     .innerJoin(vendors, eq(vendors.id, products.vendorId))
-    .where(and(eq(subscriptions.accountId, customerId), isNull(subscriptions.cancelledOn)))
-    .orderBy(asc(products.name), asc(subscriptions.id))
+    .where(eq(subscriptions.accountId, customerId))
+    .orderBy(
+      sql`${subscriptions.cancelledOn} is not null`,
+      desc(subscriptions.cancelledOn),
+      asc(products.name),
+      desc(subscriptions.id),
+    )
     .all();
-  return rows.map((row) => ({ ...row, price: formatPrice(row.priceCents) }));
+  return rows.map((row) => ({
+    ...row,
+    nextDueOn: row.cancelledOn === null ? row.nextDueOn : null,
+    price: formatPrice(row.priceCents),
+  }));
 }

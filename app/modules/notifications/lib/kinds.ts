@@ -25,6 +25,14 @@ const kinds = {
     /** The Delivery Schedule as shown to people, e.g. "Every two weeks". */
     scheduleLabel: string;
   }) => `${customerEmail} subscribed to ${productName}, delivered ${scheduleLabel.toLowerCase()}.`,
+  /** To a Vendor, when a Customer cancels a Subscription to one of its Products. */
+  "subscription-cancelled": ({
+    customerEmail,
+    productName,
+  }: {
+    customerEmail: string;
+    productName: string;
+  }) => `${customerEmail} cancelled their Subscription to ${productName}.`,
 };
 
 type Kinds = typeof kinds;

@@ -1,10 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { accounts, subscriptions, type DeliverySchedule } from "~/db/schema";
+import { subscriptions, type DeliverySchedule } from "~/db/schema";
 import { findAccount, findDeliveryAddress } from "~/modules/accounts";
 import { addDays, type CalendarDate } from "~/modules/calendar";
 import { deliveryScheduleOptions } from "~/modules/catalogue";
-import { sendNotification } from "~/modules/notifications";
 import type { MarketplaceDatabase } from "~/modules/vendors";
+import { notifyVendor } from "./notify-vendor";
 import { findSubscribableProduct } from "./subscribable-product";
 
 /** What a Customer picks when they subscribe. */
@@ -59,20 +59,13 @@ export async function subscribe(
         nextDueOn: addDays(today, 1),
       })
       .run();
-    const vendorAccounts = await tx
-      .select({ id: accounts.id })
-      .from(accounts)
-      .where(eq(accounts.vendorId, product.vendorId))
-      .all();
-    for (const vendorAccount of vendorAccounts) {
-      await sendNotification(tx, vendorAccount.id, {
-        kind: "new-subscription",
-        // A Customer who has a Delivery Address has an Account.
-        customerEmail: customer!.email,
-        productName: product.name,
-        scheduleLabel: scheduleLabels.get(pick.deliverySchedule)!,
-      });
-    }
+    await notifyVendor(tx, product.vendorId, {
+      kind: "new-subscription",
+      // A Customer who has a Delivery Address has an Account.
+      customerEmail: customer!.email,
+      productName: product.name,
+      scheduleLabel: scheduleLabels.get(pick.deliverySchedule)!,
+    });
   });
   return { ok: true };
 }
