@@ -14,33 +14,41 @@ export interface JobSettings {
 export type JobRequest =
   { ok: true; today: CalendarDate } | { ok: false; status: 400 | 401; message: string };
 
-const todaySchema = z.iso.date();
+/**
+ * What a request to run the job says: its Authorization header (missing is
+ * ""), and the `?today=` it asks for: undefined when it asks for none, null
+ * when what it asks for isn't a date. It never fails, so `readJobRequest`
+ * can check the secret before it says anything about the date.
+ */
+export const jobRequestSchema = z.object({
+  authorization: z.string().default(""),
+  today: z.iso.date().nullable().catch(null).optional(),
+});
+
+export type JobInput = z.infer<typeof jobRequestSchema>;
 
 /**
- * Reads a request to run the daily job. Refused (401) without the secret.
- * With it, the job runs for `realToday`, or for the caller's `?today=` when
+ * Decides a request to run the daily job. Refused (401) without the secret.
+ * With it, the job runs for `realToday`, or for the caller's `today` when
  * the settings accept one, so tests can move time forward. A `today` where
  * none is accepted, or one that isn't a date, is refused (400).
  */
 export function readJobRequest(
-  request: Request,
+  input: JobInput,
   settings: JobSettings,
   realToday: CalendarDate,
 ): JobRequest {
-  // Stryker disable next-line StringLiteral: equivalent, a missing header never equals "Bearer <secret>" whatever it defaults to
-  if (!sameSecret(request.headers.get("authorization") ?? "", `Bearer ${settings.secret}`)) {
+  if (!sameSecret(input.authorization, `Bearer ${settings.secret}`)) {
     return { ok: false, status: 401, message: "This job needs its secret." };
   }
-  const asked = new URL(request.url).searchParams.get("today");
-  if (asked === null) return { ok: true, today: realToday };
+  if (input.today === undefined) return { ok: true, today: realToday };
   if (!settings.acceptsToday) {
     return { ok: false, status: 400, message: "This job runs only for the real today here." };
   }
-  const today = todaySchema.safeParse(asked);
-  if (!today.success) {
+  if (input.today === null) {
     return { ok: false, status: 400, message: "today must be a date, YYYY-MM-DD." };
   }
-  return { ok: true, today: today.data };
+  return { ok: true, today: input.today };
 }
 
 /** Compares in constant time, so the response time doesn't give the secret away. */

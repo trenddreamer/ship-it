@@ -5,12 +5,16 @@
 import { config } from "~/config.server";
 import { db } from "~/db/client.server";
 import { createDueDeliveries } from "~/modules/deliveries";
-import { readJobRequest } from "~/modules/deliveries/server";
+import { jobRequestSchema, readJobRequest } from "~/modules/deliveries/server";
 import { today } from "~/today.server";
 import type { Route } from "./+types/jobs.create-due-deliveries";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const job = readJobRequest(request, config.dueDeliveriesJob, today());
+  const input = jobRequestSchema.parse({
+    authorization: request.headers.get("authorization") ?? undefined,
+    today: new URL(request.url).searchParams.get("today") ?? undefined,
+  });
+  const job = readJobRequest(input, config.dueDeliveriesJob, today());
   if (!job.ok) return Response.json({ error: job.message }, { status: job.status });
   await createDueDeliveries(db, job.today);
   return Response.json({ ok: true, today: job.today });
