@@ -1,0 +1,8 @@
+# Generated, or owned by another tool.
+build/
+.react-router/
+data/
+app/db/migrations/
+package-lock.json
+skills-lock.json
+.claude/skills/

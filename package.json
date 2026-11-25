@@ -8,15 +8,19 @@
   "scripts": {
     "typecheck": "react-router typegen && tsc --noEmit && tsc -p .sandcastle/agent-workflows --noEmit",
     "test": "vitest run",
+    "lint": "oxlint --deny-warnings",
     "lint:boundaries": "depcruise app",
-    "check": "npm run typecheck && npm run lint:boundaries && npm run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run lint:boundaries && npm run test",
     "prepare": "husky",
     "dev": "react-router dev",
     "build": "react-router build",
     "start": "react-router-serve ./build/server/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx app/db/migrate.ts",
-    "db:seed": "tsx app/db/seed.ts"
+    "db:seed": "tsx app/db/seed.ts",
+    "db:reset": "tsx app/db/reset.ts && npm run db:migrate && npm run db:seed"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "^0.14.0",
@@ -29,6 +33,8 @@
     "dependency-cruiser": "^18.9.0",
     "drizzle-kit": "^0.31.11",
     "husky": "^9.1.7",
+    "oxlint": "^1.95.0",
+    "prettier": "^3.10.1",
     "tailwindcss": "^4.3.5",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",

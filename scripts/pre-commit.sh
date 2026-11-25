@@ -4,9 +4,14 @@
 # Never bypass it (no --no-verify) and never edit it to get a commit through.
 #
 # Budget: this hook must finish in under 3 seconds. Only fast, staged-file
-# checks belong here. Typecheck, tests and the boundary lint grow with the
-# codebase, so they run in `npm run check` and CI, not here.
+# checks belong here: file sizes, Prettier and Oxlint. Typecheck, tests and
+# the boundary lint grow with the codebase, so they run in `npm run check`
+# and CI, not here.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-scripts/check-file-tokens.sh
+# Run both, so one commit attempt reports every problem.
+failed=0
+scripts/check-file-tokens.sh || failed=1
+scripts/check-style.sh || failed=1
+exit "$failed"

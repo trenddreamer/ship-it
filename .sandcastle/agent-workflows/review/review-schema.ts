@@ -7,25 +7,24 @@ export const reviewSchema = z
     comments: z
       .array(
         z.strictObject({
-          path: z
-            .string()
-            .min(1)
-            .describe("The file, relative to the repository root."),
+          path: z.string().min(1).describe("The file, relative to the repository root."),
           line: z
             .number()
             .int()
             .positive()
             .describe(
-              "A line in the file as it is now, inside a hunk of the diff against the base. A comment outside the hunks is dropped."
+              "A line in the file as it is now, inside a hunk of the diff against the base. A comment outside the hunks is dropped.",
             ),
           body: z
             .string()
             .min(1)
             .describe(
-              "The finding, in Markdown: the rule or spec line it breaks, and what to do instead."
+              "The finding, in Markdown: the rule or spec line it breaks, and what to do instead.",
             ),
-        })
+        }),
       )
-      .describe("One entry per finding you left unfixed. Empty is fine."),
+      .describe(
+        "One entry per unfixed finding that sits on a line inside the diff's hunks. Findings with no such line go in the verdict instead. Empty is fine.",
+      ),
   })
   .describe("The review's inline comments.");

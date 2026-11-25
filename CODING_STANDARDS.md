@@ -34,6 +34,10 @@ A diff must not loosen the checker. That means it must not:
 
 Tightening the check is fine, e.g. adding a layering rule. Any other change to `.dependency-cruiser.cjs` or those scripts needs a reason in the ticket, and a human should sign it off.
 
+### Don't weaken the lint or the formatter
+
+Oxlint (`.oxlintrc.json`) and Prettier (`.prettierrc.json`, `.prettierignore`) run in the pre-commit hook and in `npm run check`. A diff must not turn a rule off, lower it to a warning, add an ignore pattern, or add an `oxlint-disable` comment without a reason in the ticket. Fix the code instead. Turning a rule on is fine.
+
 ### Keep the checker able to see the code
 
 dependency-cruiser needs a TypeScript version it supports to read `.ts` files, and to see type-only imports. It currently supports 6.x and 7.1+, but **not 7.0**. On an unsupported version it doesn't fail. It reports `no dependency violations found (0 modules ... cruised)`. After any change to TypeScript, `tsconfig.json` or the dependency-cruiser version, run `npm run lint:boundaries` and check that it cruised more than 0 modules. A 0-module run is a failure, not a pass.
@@ -61,11 +65,23 @@ The public surface is every root file, so:
 
 ### Modules are deep
 
-_Judgement call._ An entry point should hide real behaviour. A module whose entry points just pass straight through to `lib/`, or whose interface is nearly as large as its implementation, is shallow. Fold it into its caller, or move more behaviour behind the interface.
+_Judgement call._ Judge depth on the whole module: a small interface hiding a lot of behaviour. A module whose interface is nearly as large as its implementation is shallow. Fold it into its caller, or move more behaviour behind the interface.
+
+An entry point that re-exports a function from `lib/` by name (`export { toSlug } from "./lib/impl"`) is how a module exposes its behaviour, not a shallow module. Prefer it to a wrapper function that only calls through. Document the function where it is defined.
 
 ### Modules are flat
 
 Every folder directly under `app/modules/` is a module. Don't nest a module inside another. Shared code that several modules need becomes its own module with its own entry points, not a shared folder that others reach into.
+
+## Data
+
+### Validate input with Zod
+
+Anything from outside the app (form data in an action, route params, query strings, a request body) is parsed with a Zod schema before it reaches a module. Use `safeParse` where the user can fix the input, and show them the errors. Modules then work with typed values, and don't check them again. Reuse a module's schema (such as `priceSchema`) instead of writing the same rule twice.
+
+### Prices are whole cents
+
+A Price is stored, passed around and computed on as whole, non-negative cents (an integer), never as a decimal or float. Validate one with `priceSchema` and show one with `formatPrice`, both from `app/modules/price/`. That gives the `en-ZA` format, e.g. `R 1 500,00`. Never format a Price by hand.
 
 ## Files
 
@@ -75,4 +91,4 @@ The pre-commit hook (`scripts/check-file-tokens.sh`) rejects any staged file ove
 
 ### The pre-commit hook stays under 3 seconds
 
-`scripts/pre-commit.sh` runs only fast checks on staged files. Typecheck, tests, the boundary lint, or anything else that grows with the codebase runs in `npm run check` and CI, never in the hook.
+`scripts/pre-commit.sh` runs only fast checks on staged files: file sizes, Prettier and Oxlint. Typecheck, tests, the boundary lint, or anything else that grows with the codebase runs in `npm run check` and CI, never in the hook.

@@ -13,13 +13,10 @@ export const explorePlanSchema = z
             .int()
             .optional()
             .describe(
-              "Only on a duplicate: the oldest issue in the batch it duplicates. That issue survives. Leave it out when this issue survives."
+              "Only on a duplicate: the oldest issue in the batch it duplicates. That issue survives. Leave it out when this issue survives.",
             ),
-          comment: z
-            .string()
-            .min(1)
-            .describe("The Markdown comment to post on the issue, as-is."),
-        })
+          comment: z.string().min(1).describe("The Markdown comment to post on the issue, as-is."),
+        }),
       )
       .describe("One entry per issue in the batch. Every issue exactly once."),
   })

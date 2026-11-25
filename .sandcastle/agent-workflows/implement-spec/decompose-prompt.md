@@ -28,3 +28,5 @@ by its absolute path, e.g. `![now](/tmp/evidence/3-notes.png)`. The workflow
 uploads them.
 
 You will be asked for the queue as structured output.
+
+When the work is done, end your final message with `<promise>COMPLETE</promise>`.

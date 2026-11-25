@@ -7,6 +7,7 @@ import {
   type RunOptions,
   type RunResult,
 } from "@ai-hero/sandcastle";
+import { DONE } from "./common";
 
 export type RunWithExtractionOptions<T> = Omit<RunOptions, "output"> & {
   readonly output: OutputObjectDefinition<T>;
@@ -24,14 +25,9 @@ export type RunWithExtractionOptions<T> = Omit<RunOptions, "output"> & {
 // toolset. The second resumes that session and asks only for the structured
 // output, so the answer is extracted from everything the first run read.
 export async function runWithExtraction<T>(
-  options: RunWithExtractionOptions<T>
+  options: RunWithExtractionOptions<T>,
 ): Promise<RunResult & { output: T }> {
-  const {
-    output,
-    extractionPrompt,
-    maxRetries = 2,
-    ...produceOptions
-  } = options;
+  const { output, extractionPrompt, maxRetries = 2, ...produceOptions } = options;
 
   // Agents that can't resume a session (a custom provider with no session
   // storage; every built-in agent can) get no second pass and no retries, so
@@ -41,6 +37,7 @@ export async function runWithExtraction<T>(
       ...produceOptions,
       ...appendToPrompt(produceOptions, extractionPrompt),
       output: { ...output, maxRetries: 0 },
+      completionSignal: [DONE, `</${output.tag}>`],
     });
   }
 
@@ -48,9 +45,7 @@ export async function runWithExtraction<T>(
   const sessionId = produce.iterations.at(-1)?.sessionId;
 
   if (!sessionId) {
-    throw new Error(
-      "Cannot extract structured output because the produce run had no session id."
-    );
+    throw new Error("Cannot extract structured output because the produce run had no session id.");
   }
 
   const { promptArgs: _promptArgs, ...extractionOptions } = produceOptions;
@@ -65,6 +60,8 @@ export async function runWithExtraction<T>(
     prompt: extractionPrompt,
     resumeSession: sessionId,
     output: extractionOutput,
+    // The closing tag ends the answer, so it is this pass's completion signal.
+    completionSignal: `</${output.tag}>`,
   });
 
   return { ...produce, output: extraction.output };
@@ -74,7 +71,7 @@ export async function runWithExtraction<T>(
 // substitution still applies to it.
 const appendToPrompt = (
   options: Pick<RunOptions, "prompt" | "promptFile">,
-  extractionPrompt: string
+  extractionPrompt: string,
 ): Pick<RunOptions, "prompt" | "promptFile"> => {
   const suffix = [
     "",
@@ -90,9 +87,6 @@ const appendToPrompt = (
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "run-with-extraction-"));
   const promptFile = path.join(dir, path.basename(options.promptFile));
-  fs.writeFileSync(
-    promptFile,
-    `${fs.readFileSync(options.promptFile, "utf8")}${suffix}`
-  );
+  fs.writeFileSync(promptFile, `${fs.readFileSync(options.promptFile, "utf8")}${suffix}`);
   return { promptFile };
 };

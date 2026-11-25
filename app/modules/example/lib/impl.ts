@@ -1,7 +1,8 @@
 // Implementation: private to this module. Import it only from within
 // app/modules/example/, never from outside or from tests.
-export function slugify(input: string): string {
-  return input
+/** Turns a free-text title into a URL-safe slug. */
+export function toSlug(title: string): string {
+  return title
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()

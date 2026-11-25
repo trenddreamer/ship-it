@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { formatPrice } from "~/modules/price";
 import { listApprovedVendors } from "../index";
 import { addProduct, addVendor, freshDatabase } from "./database";
 
@@ -20,22 +21,14 @@ describe("listApprovedVendors", () => {
     expect(vendor.name).toBe("Karoo Farm");
     expect(vendor.description).toBe("Karoo Farm description");
     expect(vendor.products).toEqual([
-      expect.objectContaining({ name: "Free-range eggs", priceCents: 6500, price: "R65.00" }),
-      expect.objectContaining({ name: "Lamb box", priceCents: 150000, price: "R1 500.00" }),
+      expect.objectContaining({
+        name: "Free-range eggs",
+        priceCents: 6500,
+        price: formatPrice(6500),
+      }),
+      expect.objectContaining({ name: "Lamb box", priceCents: 150000, price: formatPrice(150000) }),
     ]);
     expect(vendor.products[0]?.description).toBe("Free-range eggs description");
-  });
-
-  it("formats Prices with cents and below one rand", () => {
-    const database = freshDatabase();
-    const shop = addVendor(database, "Shop", "approved");
-    addProduct(database, shop, "A", 15000);
-    addProduct(database, shop, "B", 4999);
-    addProduct(database, shop, "C", 5);
-
-    const prices = listApprovedVendors(database)[0]!.products.map((p) => p.price);
-
-    expect(prices).toEqual(["R150.00", "R49.99", "R0.05"]);
   });
 
   it("keeps an approved Vendor with no Products, with an empty list", () => {

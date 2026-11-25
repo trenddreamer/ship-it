@@ -1,9 +1,5 @@
 {
-  "include": [
-    "app/**/*",
-    ".react-router/types/**/*",
-    "*.config.ts"
-  ],
+  "include": ["app/**/*", ".react-router/types/**/*", "*.config.ts"],
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
@@ -19,6 +15,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": { "~/*": ["./app/*"] }
   }
 }

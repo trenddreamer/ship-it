@@ -1,7 +1,7 @@
 import { asc, eq, inArray } from "drizzle-orm";
-import { products, vendors } from "../../../db/schema";
+import { products, vendors } from "~/db/schema";
+import { formatPrice } from "~/modules/price";
 import type { MarketplaceDatabase } from "./database";
-import { formatRands } from "./price";
 
 export interface ShownProduct {
   id: number;
@@ -9,7 +9,7 @@ export interface ShownProduct {
   description: string;
   /** Price per Delivery in whole cents. */
   priceCents: number;
-  /** Price per Delivery formatted in rands, e.g. "R150.00". */
+  /** Price per Delivery formatted for display, e.g. "R 150,00". */
   price: string;
 }
 
@@ -21,10 +21,12 @@ export interface ShownVendor {
 }
 
 /**
- * Every approved Vendor with its Products, ordered by name. Pending and
- * rejected Vendors, and their Products, are never returned.
+ * The Vendors a Customer may see: every approved Vendor, each with its
+ * Products and their Price per Delivery, ordered by name. Approved Vendors
+ * without Products are included with an empty list. Pending and rejected
+ * Vendors, and their Products, are never returned.
  */
-export function findApprovedVendors(database: MarketplaceDatabase): ShownVendor[] {
+export function listApprovedVendors(database: MarketplaceDatabase): ShownVendor[] {
   const approved = database
     .select({ id: vendors.id, name: vendors.name, description: vendors.description })
     .from(vendors)
@@ -52,7 +54,7 @@ export function findApprovedVendors(database: MarketplaceDatabase): ShownVendor[
       name: row.name,
       description: row.description,
       priceCents: row.priceCents,
-      price: formatRands(row.priceCents),
+      price: formatPrice(row.priceCents),
     });
   }
 

@@ -1,15 +1,16 @@
 # ship-it
 
-Modules are deep modules: see [app/modules/README.md](./app/modules/README.md) before adding or importing one, and follow [CODING_STANDARDS.md](./CODING_STANDARDS.md). Run `npm run check` (typecheck, boundaries, tests) before committing.
+Modules are deep modules: see [app/modules/README.md](./app/modules/README.md) before adding or importing one, and follow [CODING_STANDARDS.md](./CODING_STANDARDS.md). Run `npm run check` before committing.
 
 ## Stack and commands
 
 React Router (framework mode) on Node 22, with Drizzle over SQLite and Vitest. Routes are in `app/routes.ts` and `app/routes/`, and the schema is in `app/db/schema.ts`.
 
 - `npm run dev`: dev server. `npm run build`: production build, which must pass.
-- `npm run check`: typecheck, module boundaries and tests. CI runs it on every pull request.
+- `npm run check`: formatting, lint, typecheck, module boundaries and tests. CI runs it on every pull request. `npm run format` fixes formatting.
 - `npm run db:generate`: write a migration after changing the schema. Commit both together.
-- `npm run db:migrate`, then `npm run db:seed`: set up the database in `data/` (override with `DATABASE_PATH`).
+- `npm run db:migrate`, then `npm run db:seed`: set up the database in `data/` (override with `DATABASE_PATH`). The seed only fills an empty database; `npm run db:reset` rebuilds it from scratch.
+- Import from `app/` with `~/`, e.g. `~/modules/vendors`.
 
 ## Agent skills
 

@@ -1,11 +1,11 @@
 name: CI
 
-# The gate every change goes through: typecheck, module boundaries, tests,
-# a fresh database and a production build.
+# The gate every change goes through: formatting, lint, typecheck, module
+# boundaries, tests, a fresh database and a production build.
 #
 # WHY IT EXISTS
-#   The pre-commit hook is kept under 3 seconds, so it checks only file
-#   sizes. Everything that grows with the codebase runs here instead, on
+#   The pre-commit hook is kept under 3 seconds, so it checks only staged
+#   files: their size, formatting and lint. Everything that grows with the codebase runs here instead, on
 #   every pull request, whoever opened it. The factory pushes with
 #   FACTORY_PAT, not GITHUB_TOKEN, so its pull requests and the reviewer's
 #   fix-up commits trigger this too.
@@ -53,7 +53,7 @@ jobs:
           npm run db:migrate
           npm run db:seed
 
-      - name: Typecheck, module boundaries and tests
+      - name: Formatting, lint, typecheck, module boundaries and tests
         run: npm run check
 
       - name: Build

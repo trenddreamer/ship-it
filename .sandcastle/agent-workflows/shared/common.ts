@@ -2,6 +2,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as sandcastle from "@ai-hero/sandcastle";
 
+// Sandcastle's default completion signal. Every prompt ends by asking for it,
+// so a run that stops without it ("reached 1 iteration(s) without completion
+// signal") stopped before the work was done.
+export const DONE = "<promise>COMPLETE</promise>";
+
 export const outputDir = (): string => process.env.OUTPUT_DIR ?? "/tmp";
 
 export const required = (name: string): string => {
@@ -15,10 +20,7 @@ export const required = (name: string): string => {
 
 export const writeJson = (filename: string, value: unknown): void => {
   fs.mkdirSync(outputDir(), { recursive: true });
-  fs.writeFileSync(
-    path.join(outputDir(), filename),
-    JSON.stringify(value, null, 2)
-  );
+  fs.writeFileSync(path.join(outputDir(), filename), JSON.stringify(value, null, 2));
 };
 
 // The one agent every factory workflow runs. It authenticates with a Claude

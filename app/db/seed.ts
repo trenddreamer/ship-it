@@ -1,8 +1,12 @@
-// `npm run db:seed`: fills a freshly migrated database with realistic
+// `npm run db:seed`: fills a freshly migrated, empty database with realistic
 // Marketplace data. Every agent run starts from a new database, migrated
 // and then seeded with this, so keep it deterministic and quick.
 //
+// It refuses to touch a database that already has rows, so it can never
+// wipe real data. To start again, run `npm run db:reset`.
+//
 // Add seed data here as tables are added to schema.ts.
+import { sql } from "drizzle-orm";
 import { databasePath, db, type DB } from "./client.server";
 import { products, vendors, type VendorApprovalStatus } from "./schema";
 
@@ -88,10 +92,24 @@ const seedVendors: SeedVendor[] = [
   },
 ];
 
+/** The tables that already hold rows, ignoring Drizzle's own bookkeeping. */
+function tablesWithRows(database: DB): string[] {
+  const tables = database.all<{ name: string }>(
+    sql`select name from sqlite_master where type = 'table' and name not like 'sqlite_%' and name != '__drizzle_migrations'`,
+  );
+  return tables
+    .map(({ name }) => name)
+    .filter((name) => database.get(sql`select 1 from ${sql.identifier(name)} limit 1`));
+}
+
 export function seed(database: DB): void {
+  const filled = tablesWithRows(database);
+  if (filled.length > 0) {
+    throw new Error(
+      `${databasePath} already has rows in ${filled.join(", ")}. The seed only fills an empty database. Run \`npm run db:reset\` to start again.`,
+    );
+  }
   database.transaction((tx) => {
-    tx.delete(products).run();
-    tx.delete(vendors).run();
     for (const vendor of seedVendors) {
       const { id } = tx
         .insert(vendors)
