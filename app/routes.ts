@@ -9,5 +9,6 @@ export default [
     route("sign-out", "routes/sign-out.tsx"),
     route("vendor", "routes/vendor.tsx"),
     route("admin", "routes/admin.tsx"),
+    route("inbox", "routes/inbox.tsx"),
   ]),
 ] satisfies RouteConfig;

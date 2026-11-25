@@ -148,4 +148,29 @@ test.describe.serial("Marketplace journey", () => {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Marketplace");
     expect((await page.goto("/vendor"))?.status()).toBe(403);
   });
+
+  test("the Admin finds the Vendor sign-up in their Inbox, and it is read once opened", async ({
+    page,
+  }) => {
+    await signIn(page, demo.admin);
+    const inbox = page.getByRole("link", { name: /^Inbox/ });
+    // The seed's Vendor sign-ups notified the Admin too, so more than one is unread.
+    await expect(inbox).toHaveText(/^Inbox \(\d+ unread\)$/);
+
+    await inbox.click();
+    await expect(page).toHaveURL(/\/inbox$/);
+    await expect(page.getByRole("listitem").first()).toContainText(
+      "Cederberg Rooibos signed up as a Vendor and is awaiting approval.",
+    );
+    await expect(inbox).toHaveText("Inbox");
+
+    await page.getByRole("link", { name: "Marketplace", exact: true }).click();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(inbox).toHaveText("Inbox");
+    await signOut(page);
+
+    await signIn(page, demo.customer);
+    await page.getByRole("link", { name: /^Inbox/ }).click();
+    await expect(page.getByText("No Notifications yet.")).toBeVisible();
+  });
 });
