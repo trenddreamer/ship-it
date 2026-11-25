@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { notifications } from "~/db/schema";
 import type { DatabaseOrTransaction } from "./database";
 import { messageFor, type NewNotification, type NotificationKind } from "./kinds";
@@ -47,6 +47,13 @@ export async function openInbox(
     .where(eq(notifications.accountId, accountId))
     .orderBy(desc(notifications.id))
     .all();
+  // Only the ones listed: one sent since the select stays unread.
+  const unreadIds = rows.filter((row) => !row.read).map((row) => row.id);
+  await database
+    .update(notifications)
+    .set({ read: true })
+    .where(inArray(notifications.id, unreadIds))
+    .run();
   return rows.map((row) => ({
     id: row.id,
     kind: row.kind as NotificationKind,
@@ -54,4 +61,17 @@ export async function openInbox(
     sentAt: row.sentAt,
     unread: !row.read,
   }));
+}
+
+/** How many Notifications in an Account's Inbox are unread. */
+export async function countUnread(
+  database: DatabaseOrTransaction,
+  accountId: number,
+): Promise<number> {
+  const [row] = await database
+    .select({ unread: count() })
+    .from(notifications)
+    .where(and(eq(notifications.accountId, accountId), eq(notifications.read, false)))
+    .all();
+  return row!.unread;
 }
