@@ -6,6 +6,7 @@
 // ~/modules/calendar); none reads the clock.
 export { createDueDeliveries } from "./lib/create-due-deliveries";
 export { catchUpSubscription } from "./lib/catch-up";
+export { recordedPriceCents, type PricedSubscription } from "./lib/recorded-price";
 export { listVendorDueDeliveries, type DueDelivery } from "./lib/vendor-due-deliveries";
 export { deliveryScheduleLabel, deliveryScheduleOptions } from "./lib/schedule-options";
 export { shipDelivery, type ShipRefusal, type ShipResult } from "./lib/ship-delivery";

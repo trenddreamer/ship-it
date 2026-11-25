@@ -8,6 +8,7 @@ import {
   type DeliverySchedule,
 } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
+import { recordedPriceCents } from "~/modules/deliveries";
 import { formatPrice } from "~/modules/price";
 import type { MarketplaceDatabase } from "~/db/database";
 
@@ -17,7 +18,10 @@ export interface CustomerSubscription {
   productName: string;
   vendorName: string;
   deliverySchedule: DeliverySchedule;
-  /** The Product's Price per Delivery, in whole cents. */
+  /**
+   * The Price per Delivery, in whole cents: what the next Delivery will record
+   * (the old Price inside a Notice Period); the current Price once cancelled.
+   */
   priceCents: number;
   /** The Price formatted for display, e.g. "R 150,00". */
   price: string;
@@ -48,6 +52,7 @@ export async function listCustomerSubscriptions(
       productName: products.name,
       vendorName: vendors.name,
       deliverySchedule: subscriptions.deliverySchedule,
+      priceChangeId: subscriptions.priceChangeId,
       priceCents: products.priceCents,
       nextDueOn: subscriptions.nextDueOn,
       cancelledOn: subscriptions.cancelledOn,
@@ -76,18 +81,24 @@ export async function listCustomerSubscriptions(
       ),
     )
     .all();
-  return rows.map(({ productId, ...row }) => {
-    const active = row.cancelledOn === null;
-    const offeredHere = new Set(
-      offered.filter((o) => o.productId === productId).map((o) => o.deliverySchedule),
-    );
-    return {
-      ...row,
-      nextDueOn: active ? row.nextDueOn : null,
-      price: formatPrice(row.priceCents),
-      switchTo: active
-        ? deliverySchedules.filter((s) => s !== row.deliverySchedule && offeredHere.has(s))
-        : [],
-    };
-  });
+  return Promise.all(
+    rows.map(async ({ productId, priceChangeId, ...row }) => {
+      const active = row.cancelledOn === null;
+      const offeredHere = new Set(
+        offered.filter((o) => o.productId === productId).map((o) => o.deliverySchedule),
+      );
+      const priceCents = active
+        ? await recordedPriceCents(database, { productId, priceChangeId }, row.nextDueOn)
+        : row.priceCents;
+      return {
+        ...row,
+        priceCents,
+        price: formatPrice(priceCents),
+        nextDueOn: active ? row.nextDueOn : null,
+        switchTo: active
+          ? deliverySchedules.filter((s) => s !== row.deliverySchedule && offeredHere.has(s))
+          : [],
+      };
+    }),
+  );
 }
