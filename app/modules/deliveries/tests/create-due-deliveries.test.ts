@@ -106,6 +106,15 @@ describe("createDueDeliveries after a cancellation", () => {
     expect(await dueDates()).toEqual(["2026-11-02"]);
   });
 
+  it("creates none due after today, even for a Subscription cancelled later", async () => {
+    const { database, thandi, subscriptionId, dueDates } = await weeklyEggsFrom("2026-11-01");
+    await cancelSubscription(database, thandi, subscriptionId, "2026-11-20");
+
+    await createDueDeliveries(database, "2026-11-10");
+
+    expect(await dueDates()).toEqual(["2026-11-02", "2026-11-09"]);
+  });
+
   it("creates none when cancelled on the day of subscribing", async () => {
     const { database, thandi, subscriptionId, dueDates } = await weeklyEggsFrom("2026-11-01");
 

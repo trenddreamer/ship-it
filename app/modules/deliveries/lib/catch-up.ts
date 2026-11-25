@@ -24,6 +24,7 @@ export async function catchUpSubscription(
     .all();
   if (!subscription) return;
   const { cancelledOn } = subscription;
+  // Stryker disable next-line EqualityOperator: equivalent, on equal dates both branches are the same
   const lastDay = cancelledOn !== null && cancelledOn < today ? cancelledOn : today;
   const firstDueOn = addDays(subscription.scheduleStartsOn, 1);
   let dueOn = subscription.nextDueOn;
