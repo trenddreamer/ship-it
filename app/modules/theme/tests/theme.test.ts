@@ -68,9 +68,11 @@ describe("the theme", () => {
     expect(declarations(":root")).toMatchObject({ "color-scheme": "light dark" });
   });
 
-  it("tells the browser before the stylesheet loads, so a dark page doesn't flash white", () => {
-    const root = readFileSync(join(appDir, "root.tsx"), "utf8");
-    expect(root).toMatch(/<meta name="color-scheme" content="light dark" \/>/);
+  // A rule, not a style set from script: the build only switches the
+  // compiled light-dark() colours beside color-scheme declarations it sees.
+  it("pins one scheme when <html> has a data-theme", () => {
+    expect(declarations(':root[data-theme="light"]')).toEqual({ "color-scheme": "light" });
+    expect(declarations(':root[data-theme="dark"]')).toEqual({ "color-scheme": "dark" });
   });
 
   it("is dark in the dark scheme and light in the light one", () => {

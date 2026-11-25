@@ -20,5 +20,6 @@ export default [
     route("charges", "routes/charges.tsx"),
   ]),
   route("feedback", "routes/feedback.ts"),
+  route("theme", "routes/theme.ts"),
   route("jobs/create-due-deliveries", "routes/jobs.create-due-deliveries.ts"),
 ] satisfies RouteConfig;
