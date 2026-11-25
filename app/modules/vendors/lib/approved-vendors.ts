@@ -33,6 +33,9 @@ export function listApprovedVendors(database: MarketplaceDatabase): ShownVendor[
     .where(eq(vendors.approvalStatus, "approved"))
     .orderBy(asc(vendors.name), asc(vendors.id))
     .all();
+  // Without this early return the next query finds no Products and the
+  // result is the same, so mutating it changes nothing a test can see.
+  // Stryker disable next-line ConditionalExpression: equivalent, it only saves a query
   if (approved.length === 0) return [];
 
   const rows = database

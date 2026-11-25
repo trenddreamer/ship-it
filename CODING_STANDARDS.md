@@ -38,6 +38,12 @@ Tightening the check is fine, e.g. adding a layering rule. Any other change to `
 
 Oxlint (`.oxlintrc.json`) and Prettier (`.prettierrc.json`, `.prettierignore`) run in the pre-commit hook and in `npm run check`. A diff must not turn a rule off, lower it to a warning, add an ignore pattern, or add an `oxlint-disable` comment without a reason in the ticket. Fix the code instead. Turning a rule on is fine.
 
+### Don't weaken the mutation check
+
+Mutation testing (`npm run test:mutation`, config `stryker.config.mjs`) targets a score of 85–90% and fails below 85%. A diff must not lower `thresholds`, shrink `mutate`, or raise `concurrency` without a reason in the ticket. More workers make mutants time out, and a timeout counts as killed.
+
+A `// Stryker disable` comment covers one line (`next-line`) and one mutator, and states why the mutant is equivalent. A disable on a whole file or on all mutators, or one with no reason, needs a human's sign-off. A survivor that is a real gap in the tests gets a test, not a disable comment.
+
 ### Keep the checker able to see the code
 
 dependency-cruiser needs a TypeScript version it supports to read `.ts` files, and to see type-only imports. It currently supports 6.x and 7.1+, but **not 7.0**. On an unsupported version it doesn't fail. It reports `no dependency violations found (0 modules ... cruised)`. After any change to TypeScript, `tsconfig.json` or the dependency-cruiser version, run `npm run lint:boundaries` and check that it cruised more than 0 modules. A 0-module run is a failure, not a pass.

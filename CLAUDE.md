@@ -8,6 +8,7 @@ React Router (framework mode) on Node 22, with Drizzle over SQLite and Vitest. R
 
 - `npm run dev`: dev server. `npm run build`: production build, which must pass.
 - `npm run check`: formatting, lint, typecheck, module boundaries and tests. CI runs it on every pull request. `npm run format` fixes formatting.
+- `npm run test:mutation`: mutation testing with Stryker, on demand only. Run it after you change a module's behaviour, to check that its tests pin that behaviour down. Target: a mutation score of 85–90%. See `docs/agents/mutation-testing.md`.
 - `npm run db:generate`: write a migration after changing the schema. Commit both together.
 - `npm run db:migrate`, then `npm run db:seed`: set up the database in `data/` (override with `DATABASE_PATH`). The seed only fills an empty database; `npm run db:reset` rebuilds it from scratch.
 - Import from `app/` with `~/`, e.g. `~/modules/vendors`.
