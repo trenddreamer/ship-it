@@ -3,6 +3,12 @@
 // actions, see `./server`.
 export type { Account, AccountOf } from "./lib/account";
 export { findAccount } from "./lib/account";
+export {
+  deliveryAddressSchema,
+  findDeliveryAddress,
+  setDeliveryAddress,
+  type DeliveryAddress,
+} from "./lib/delivery-address";
 export { ensureFirstAdmin, type FirstAdmin } from "./lib/first-admin";
 export {
   customerSignUpSchema,

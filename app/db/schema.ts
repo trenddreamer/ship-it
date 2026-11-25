@@ -90,6 +90,54 @@ export const accounts = sqliteTable(
 );
 
 /**
+ * Where a Customer's Deliveries are sent: one per Customer Account, used for
+ * all their Subscriptions.
+ */
+export const deliveryAddresses = sqliteTable("delivery_addresses", {
+  accountId: integer("account_id")
+    .primaryKey()
+    .references(() => accounts.id, { onDelete: "cascade" }),
+  street: text("street").notNull(),
+  suburb: text("suburb").notNull(),
+  city: text("city").notNull(),
+  postalCode: text("postal_code").notNull(),
+});
+
+/**
+ * A Customer's ongoing arrangement to receive one Product on a Delivery
+ * Schedule. Dates are calendar dates in Africa/Johannesburg, "YYYY-MM-DD".
+ * A Customer has at most one active (not cancelled) Subscription per Product.
+ */
+export const subscriptions = sqliteTable(
+  "subscriptions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    deliverySchedule: text("delivery_schedule", { enum: deliverySchedules }).notNull(),
+    /** The day the Customer subscribed (which Price applies depends on it). */
+    subscribedOn: text("subscribed_on").notNull(),
+    /** The day the current Delivery Schedule runs from: the day of subscribing or of the last switch. */
+    scheduleStartsOn: text("schedule_starts_on").notNull(),
+    /** The day the next Delivery falls due. */
+    nextDueOn: text("next_due_on").notNull(),
+    /** The day it was cancelled; null while it is active. */
+    cancelledOn: text("cancelled_on"),
+  },
+  (table) => [
+    index("subscriptions_account_id_idx").on(table.accountId),
+    index("subscriptions_product_id_idx").on(table.productId),
+    uniqueIndex("subscriptions_one_active_per_product")
+      .on(table.accountId, table.productId)
+      .where(sql`${table.cancelledOn} is null`),
+  ],
+);
+
+/**
  * A message in one Account's Inbox. Its kind says what it reports (the kinds
  * live in app/modules/notifications); its message is the text the Inbox shows.
  * Unread until the Inbox is opened.
