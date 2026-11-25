@@ -9,6 +9,12 @@ export {
   type SubscribeResult,
 } from "./lib/subscribe";
 export { subscribeSchema } from "./lib/subscribe-schema";
+export {
+  switchDeliverySchedule,
+  type ScheduleSwitch,
+  type SwitchRefusal,
+  type SwitchResult,
+} from "./lib/switch-schedule";
 export { listCustomerSubscriptions, type CustomerSubscription } from "./lib/customer-subscriptions";
 export { findSubscribableProduct, type SubscribableProduct } from "./lib/subscribable-product";
 export {
