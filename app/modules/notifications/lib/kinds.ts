@@ -8,6 +8,12 @@ const kinds = {
   /** To every Admin, when a Vendor signs up. */
   "vendor-awaiting-approval": ({ vendorName }: { vendorName: string }) =>
     `${vendorName} signed up as a Vendor and is awaiting approval.`,
+  /** To a Vendor, when an Admin approves it. */
+  "vendor-approved": ({ vendorName }: { vendorName: string }) =>
+    `An Admin approved ${vendorName}. Customers can now see it and its Products.`,
+  /** To a Vendor, when an Admin rejects it. */
+  "vendor-rejected": ({ vendorName }: { vendorName: string }) =>
+    `An Admin rejected ${vendorName}. Customers can't see it, and it can't apply again.`,
 };
 
 type Kinds = typeof kinds;
