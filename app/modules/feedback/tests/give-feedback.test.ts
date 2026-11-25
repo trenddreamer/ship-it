@@ -2,8 +2,6 @@ import { inspect } from "node:util";
 import { DrizzleQueryError, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MarketplaceDatabase } from "~/db/database";
-import { accounts } from "~/db/schema";
-import { findAccount } from "~/modules/accounts";
 import { giveFeedback, loggingTracker } from "../server";
 import {
   addAccount,
@@ -32,10 +30,7 @@ async function titleFor(text: string) {
 /** A database without the `feedback` table, and an Account with an id nothing else contains. */
 async function brokenRecord() {
   const database = await freshDatabase();
-  await database
-    .insert(accounts)
-    .values({ id: 48213, email: "someone@example.test", passwordHash: "x", kind: "customer" });
-  const account = (await findAccount(database, 48213))!;
+  const account = await addAccount(database, "someone@example.test", "customer", 48213);
   await database.run(sql`drop table feedback`);
   return { database, account };
 }

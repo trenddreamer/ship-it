@@ -7,11 +7,15 @@ import type { Tracker, TrackerIssue } from "../server";
 
 export { freshDatabase } from "~/db/fresh-database";
 
-/** Adds an Account of this kind (a Vendor Account gets a Vendor too) and returns it. */
+/**
+ * Adds an Account of this kind (a Vendor Account gets a Vendor too) and
+ * returns it. Pass `id` to pin the Account's id, e.g. to one no log contains.
+ */
 export async function addAccount(
   database: MarketplaceDatabase,
   email: string,
   kind: schema.AccountKind,
+  id?: number,
 ): Promise<Account> {
   const vendorId =
     kind === "vendor"
@@ -23,12 +27,12 @@ export async function addAccount(
             .get()
         ).id
       : null;
-  const { id } = await database
+  const added = await database
     .insert(schema.accounts)
-    .values({ email, passwordHash: "not a real hash", kind, vendorId })
+    .values({ id, email, passwordHash: "not a real hash", kind, vendorId })
     .returning({ id: schema.accounts.id })
     .get();
-  return (await findAccount(database, id))!;
+  return (await findAccount(database, added.id))!;
 }
 
 /** Every Feedback row recorded. */
