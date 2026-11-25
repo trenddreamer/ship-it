@@ -29,12 +29,23 @@ function git(...args: string[]): string {
   );
 }
 
-/** A repo with one commit, which `origin/main` points at. */
-function repoOnMain(): string {
+/** The short SHA of the throwaway repo's `HEAD`. */
+function shortHead(): string {
+  return git("rev-parse", "--short=7", "HEAD").trim();
+}
+
+/** A repo with one commit, giving its short SHA. */
+function repoWithOneCommit(): string {
   git("init", "--quiet");
   git("commit", "--quiet", "--allow-empty", "-m", "First");
+  return shortHead();
+}
+
+/** A repo with one commit, which `origin/main` points at. */
+function repoOnMain(): string {
+  const head = repoWithOneCommit();
   git("update-ref", "refs/remotes/origin/main", "HEAD");
-  return git("rev-parse", "--short=7", "HEAD").trim();
+  return head;
 }
 
 async function currentCommitHere(): Promise<string> {
@@ -70,14 +81,12 @@ describe("currentCommit", () => {
   it("flags commits not on origin/main", async () => {
     repoOnMain();
     git("commit", "--quiet", "--allow-empty", "-m", "Second");
-    const head = git("rev-parse", "--short=7", "HEAD").trim();
+    const head = shortHead();
     expect(await currentCommitHere()).toBe(head + FLAG);
   });
 
   it("doesn't flag a clean HEAD when there's no origin/main", async () => {
-    git("init", "--quiet");
-    git("commit", "--quiet", "--allow-empty", "-m", "First");
-    const head = git("rev-parse", "--short=7", "HEAD").trim();
+    const head = repoWithOneCommit();
     expect(await currentCommitHere()).toBe(head);
   });
 
