@@ -2,7 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { priceChanges, subscriptions, type DeliverySchedule } from "~/db/schema";
 import { findAccount, findDeliveryAddress } from "~/modules/accounts";
 import { addDays, type CalendarDate } from "~/modules/calendar";
-import { deliveryScheduleOptions } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries";
 import type { MarketplaceDatabase } from "~/db/database";
 import { notifyVendor } from "./notify-vendor";
 import { findSubscribableProduct } from "./subscribable-product";
@@ -18,8 +18,6 @@ export type SubscribeResult = { ok: true } | { ok: false; error: SubscribeRefusa
 /** Why subscribing was refused. */
 export type SubscribeRefusal =
   "no-delivery-address" | "product-not-found" | "schedule-not-offered" | "already-subscribed";
-
-const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
 
 /**
  * Subscribes a Customer to a Product on one of its Delivery Schedules. The
@@ -74,7 +72,7 @@ export async function subscribe(
       // A Customer who has a Delivery Address has an Account.
       customerEmail: customer!.email,
       productName: product.name,
-      scheduleLabel: scheduleLabels.get(pick.deliverySchedule)!,
+      scheduleLabel: deliveryScheduleLabel(pick.deliverySchedule),
     });
   });
   return { ok: true };

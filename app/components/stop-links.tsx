@@ -1,8 +1,6 @@
 import { Link } from "react-router";
 import type { DeliverySchedule } from "~/db/schema";
-import { deliveryScheduleOptions } from "~/modules/deliveries";
-
-const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
+import { deliveryScheduleLabel } from "~/modules/deliveries";
 
 /**
  * Links to stop selling a Product, or one of its Delivery Schedules. Each
@@ -27,7 +25,7 @@ export function StopLinks({
       </Link>
       {product.deliverySchedules.length > 1 &&
         product.deliverySchedules.map((schedule) => {
-          const label = scheduleLabels.get(schedule)!.toLowerCase();
+          const label = deliveryScheduleLabel(schedule).toLowerCase();
           return (
             <Link
               key={schedule}

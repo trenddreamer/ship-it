@@ -4,7 +4,7 @@ import { requireAccount } from "~/accounts.server";
 import { FormError } from "~/components/text-field";
 import { db } from "~/db/client.server";
 import { findDeliveryAddress } from "~/modules/accounts";
-import { deliveryScheduleOptions } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries";
 import {
   findSubscribableProduct,
   subscribe,
@@ -62,8 +62,6 @@ export async function action({ request, params }: Route.ActionArgs) {
   return data({ scheduleErrors: undefined, formError: refusals[result.error] }, 409);
 }
 
-const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
-
 export default function Subscribe({ loaderData, actionData }: Route.ComponentProps) {
   const { product } = loaderData;
   const scheduleErrors = actionData?.scheduleErrors;
@@ -84,7 +82,7 @@ export default function Subscribe({ loaderData, actionData }: Route.ComponentPro
           {product.deliverySchedules.map((schedule) => (
             <label key={schedule} className="mt-1 flex items-center gap-2">
               <input type="radio" name="deliverySchedule" value={schedule} required />
-              {scheduleLabels.get(schedule)}
+              {deliveryScheduleLabel(schedule)}
             </label>
           ))}
           {scheduleErrors ? (

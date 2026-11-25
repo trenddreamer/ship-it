@@ -9,7 +9,7 @@ import { formatCalendarDate } from "~/modules/calendar";
 import { listVendorProducts } from "~/modules/catalogue";
 import { listVendorCharges } from "~/modules/charges";
 import {
-  deliveryScheduleOptions,
+  deliveryScheduleLabel,
   listVendorDueDeliveries,
   shipDelivery,
   shipDeliverySchema,
@@ -30,8 +30,6 @@ const approvalMessages = {
   rejected:
     "Rejected: an Admin turned your business down, so Customers can't see it, and it can't apply again.",
 } as const;
-
-const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
 
 export async function loader({ request }: Route.LoaderArgs) {
   const account = await requireAccount(request, "vendor");
@@ -64,7 +62,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         product.subscriptions.map((subscription) => ({
           id: subscription.id,
           customerEmail: subscription.customerEmail,
-          schedule: scheduleLabels.get(subscription.deliverySchedule) ?? "",
+          schedule: deliveryScheduleLabel(subscription.deliverySchedule),
           nextDue: formatCalendarDate(subscription.nextDueOn),
         })),
       ]),
@@ -129,7 +127,7 @@ export default function VendorPage({ loaderData, actionData }: Route.ComponentPr
                   <p className="text-sm text-gray-600">{product.description}</p>
                   <p className="mt-1 text-sm">
                     Delivered:{" "}
-                    {product.deliverySchedules.map((s) => scheduleLabels.get(s)).join(", ")}
+                    {product.deliverySchedules.map((s) => deliveryScheduleLabel(s)).join(", ")}
                   </p>
                   <ProductSubscriptions subscriptions={subscriptions[product.id] ?? []} />
                   <StopLinks product={product} />

@@ -1,11 +1,9 @@
 import { and, count, isNull } from "drizzle-orm";
 import { subscriptions } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
-import { deliveryScheduleOptions } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries";
 import { sendNotification, type DatabaseOrTransaction } from "~/modules/notifications";
 import { endSubscriptions, matching, type VendorStop } from "./end-subscriptions";
-
-const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
 
 /**
  * Cancels every active Subscription a Vendor's stop affects, as of `today`:
@@ -30,7 +28,7 @@ export async function cancelForVendorStop(
         : {
             kind: "delivery-schedule-stopped",
             ...about,
-            scheduleLabel: scheduleLabels.get(stop.deliverySchedule)!,
+            scheduleLabel: deliveryScheduleLabel(stop.deliverySchedule),
           },
     );
   }

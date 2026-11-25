@@ -2,15 +2,13 @@ import { Form, Link, redirect } from "react-router";
 import { requireAccount } from "~/accounts.server";
 import { db } from "~/db/client.server";
 import { previewStop, stopSchema, stopSelling } from "~/modules/catalogue";
-import { deliveryScheduleOptions } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries";
 import { today } from "~/today.server";
 import type { Route } from "./+types/vendor-products-stop";
 
 export function meta(_: Route.MetaArgs) {
   return [{ title: "Stop selling · Marketplace" }];
 }
-
-const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
 
 function notFound(): never {
   throw new Response("That Product or Delivery Schedule wasn't found.", { status: 404 });
@@ -25,7 +23,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (!preview) notFound();
   return {
     ...preview,
-    scheduleLabel: preview.deliverySchedule && scheduleLabels.get(preview.deliverySchedule)!,
+    scheduleLabel: preview.deliverySchedule && deliveryScheduleLabel(preview.deliverySchedule),
   };
 }
 

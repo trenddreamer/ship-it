@@ -7,6 +7,6 @@
 export { createDueDeliveries } from "./lib/create-due-deliveries";
 export { catchUpSubscription } from "./lib/catch-up";
 export { listVendorDueDeliveries, type DueDelivery } from "./lib/vendor-due-deliveries";
-export { deliveryScheduleOptions } from "./lib/schedule-options";
+export { deliveryScheduleLabel, deliveryScheduleOptions } from "./lib/schedule-options";
 export { shipDelivery, type ShipRefusal, type ShipResult } from "./lib/ship-delivery";
 export { shipDeliverySchema } from "./lib/ship-delivery-schema";

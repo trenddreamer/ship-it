@@ -4,7 +4,7 @@ import { FormError } from "~/components/text-field";
 import { db } from "~/db/client.server";
 import { findDeliveryAddress } from "~/modules/accounts";
 import { formatCalendarDate } from "~/modules/calendar";
-import { deliveryScheduleOptions } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries";
 import {
   cancelSubscription,
   changeSubscriptionSchema,
@@ -19,8 +19,6 @@ export function meta(_: Route.MetaArgs) {
   return [{ title: "Your Subscriptions · Marketplace" }];
 }
 
-const scheduleLabels = new Map(deliveryScheduleOptions.map((o) => [o.value, o.label]));
-
 export async function loader({ request }: Route.LoaderArgs) {
   const account = await requireAccount(request, "customer");
   const address = await findDeliveryAddress(db, account.id);
@@ -30,10 +28,13 @@ export async function loader({ request }: Route.LoaderArgs) {
       address && [address.street, address.suburb, address.city, address.postalCode].join(", "),
     subscriptions: subscriptions.map((subscription) => ({
       ...subscription,
-      schedule: scheduleLabels.get(subscription.deliverySchedule),
+      schedule: deliveryScheduleLabel(subscription.deliverySchedule),
       nextDue: subscription.nextDueOn && formatCalendarDate(subscription.nextDueOn),
       cancelled: subscription.cancelledOn && formatCalendarDate(subscription.cancelledOn),
-      switchTo: subscription.switchTo.map((value) => ({ value, label: scheduleLabels.get(value) })),
+      switchTo: subscription.switchTo.map((value) => ({
+        value,
+        label: deliveryScheduleLabel(value),
+      })),
     })),
   };
 }
