@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   deliverySchedules,
   productDeliverySchedules,
@@ -43,7 +43,13 @@ export async function findSubscribableProduct(
     })
     .from(products)
     .innerJoin(vendors, eq(vendors.id, products.vendorId))
-    .where(and(eq(products.id, productId), eq(vendors.approvalStatus, "approved")))
+    .where(
+      and(
+        eq(products.id, productId),
+        isNull(products.stoppedOn),
+        eq(vendors.approvalStatus, "approved"),
+      ),
+    )
     .get();
   if (!row) return null;
   const offered = await database

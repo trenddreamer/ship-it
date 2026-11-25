@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import {
   deliverySchedules,
   productDeliverySchedules,
@@ -79,7 +79,7 @@ export async function listVendorProducts(
   const rows = await database
     .select()
     .from(products)
-    .where(eq(products.vendorId, vendorId))
+    .where(and(eq(products.vendorId, vendorId), isNull(products.stoppedOn)))
     .orderBy(asc(products.name), asc(products.id))
     .all();
   const offered = await schedulesByProduct(

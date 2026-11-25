@@ -19,8 +19,8 @@ export async function stopSelling(
   stop: VendorStop,
   today: CalendarDate,
 ): Promise<StopResult> {
-  return database.transaction(async (tx) => {
-    await tx
+  return database.transaction(async (tx): Promise<StopResult> => {
+    const stopped = await tx
       .update(products)
       .set({ stoppedOn: today })
       .where(
@@ -30,7 +30,9 @@ export async function stopSelling(
           isNull(products.stoppedOn),
         ),
       )
-      .run();
+      .returning({ id: products.id })
+      .all();
+    if (stopped.length === 0) return { ok: false, error: "product-not-found" };
     const cancelled = await cancelForVendorStop(tx, stop, today);
     return { ok: true, cancelled };
   });
