@@ -2,7 +2,7 @@ import { z } from "zod";
 import { priceSchema } from "./price";
 
 // Rand, then at most two digits of cents after a point or a comma.
-const randAmount = /^(\d+)(?:[.,](\d{1,2}))?$/;
+const randAmount = /^\d+(?:[.,]\d{1,2})?$/;
 
 /**
  * A Price as a person types it into a form: rand, to the cent at most, with
@@ -14,7 +14,7 @@ export const priceInputSchema = z
   .trim()
   .regex(randAmount, { error: "Enter the Price in rand, to the cent at most, e.g. 150 or 150,50." })
   .transform((typed) => {
-    const [, rand = "", cents = ""] = randAmount.exec(typed) ?? [];
+    const [rand, cents = ""] = typed.split(/[.,]/);
     return Number(rand) * 100 + Number(cents.padEnd(2, "0"));
   })
   .refine((cents) => priceSchema.safeParse(cents).success, {
