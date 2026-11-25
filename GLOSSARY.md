@@ -61,7 +61,7 @@ What a Customer pays for one shipped Delivery: the Price the Delivery recorded, 
 _Avoid_: Payment, transaction, invoice
 
 **Notice Period**:
-The 7 days after a Price change. Deliveries that fall due during it are still charged the old Price.
+The 7 days after a Price change. Deliveries that fall due during it, under Subscriptions that existed before the change, are still charged the old Price. Put another way: a Delivery is charged the Price as it stood 7 days before it fell due, or when the Customer subscribed if that was later.
 _Avoid_: Grace period, warning period
 
 **Notification**:
