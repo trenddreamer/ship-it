@@ -20,13 +20,14 @@ export async function hashPassword(password: string): Promise<string> {
   return `scrypt:${salt.toString("hex")}:${key.toString("hex")}`;
 }
 
-/** Whether `password` is the one `stored` was hashed from, compared in constant time. */
+/**
+ * Whether `password` is the one `stored` (from `hashPassword`) was hashed
+ * from, compared in constant time.
+ */
 export async function passwordMatches(password: string, stored: string): Promise<boolean> {
-  const [scheme, salt, key] = stored.split(":");
-  if (scheme !== "scrypt" || !salt || !key) return false;
-  const expected = Buffer.from(key, "hex");
-  const actual = await derive(password, Buffer.from(salt, "hex"));
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  const [, salt, key] = stored.split(":");
+  const actual = await derive(password, Buffer.from(salt!, "hex"));
+  return timingSafeEqual(actual, Buffer.from(key!, "hex"));
 }
 
 /**

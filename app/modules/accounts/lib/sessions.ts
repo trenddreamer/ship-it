@@ -25,15 +25,14 @@ export interface SessionOptions {
 }
 
 /**
- * Sessions for signed-in Accounts, in a signed cookie (React Router's cookie
- * session storage) that holds only the Account's id. Every loader and action
+ * Sessions for signed-in Accounts, in a signed cookie, `__session` (React
+ * Router's cookie session storage), that holds only the Account's id. Every loader and action
  * starts with `requireAccount` (or `currentAccount` on pages open to
  * visitors).
  */
 export function createAccountSessions(database: MarketplaceDatabase, options: SessionOptions) {
   const storage = createCookieSessionStorage<{ accountId: number }>({
     cookie: {
-      name: "__session",
       httpOnly: true,
       sameSite: "lax",
       path: "/",
@@ -64,10 +63,7 @@ export function createAccountSessions(database: MarketplaceDatabase, options: Se
       const account = await currentAccount(request);
       if (!account) throw redirect(signInPath);
       if (!(kinds as AccountKind[]).includes(account.kind)) {
-        throw new Response("This page isn't open to your Account.", {
-          status: 403,
-          statusText: "Forbidden",
-        });
+        throw new Response("This page isn't open to your Account.", { status: 403 });
       }
       return account as AccountOf<K>;
     },

@@ -75,9 +75,33 @@ describe("account sessions", () => {
 
     expect(started.status).toBe(302);
     expect(started.headers.get("Location")).toBe("/vendor");
-    expect(started.headers.get("Set-Cookie")).toMatch(/HttpOnly/i);
     expect(await sessions.currentAccount(next)).toEqual(vendor);
     expect(await sessions.requireAccount(next, "vendor")).toEqual(vendor);
+  });
+
+  it("keeps the session in a site-wide, script-proof cookie for 30 days", async () => {
+    const database = await freshDatabase();
+    const { customer } = await oneOfEachKind(database);
+    const local = createAccountSessions(database, { secret });
+    const secure = createAccountSessions(database, { secret, secure: true });
+
+    const cookie = (await local.startSession(customer)).headers.get("Set-Cookie")!;
+    const secureCookie = (await secure.startSession(customer)).headers.get("Set-Cookie")!;
+
+    expect(cookie).toMatch(/^__session=[^;]+; Max-Age=2592000; Path=\/; HttpOnly; SameSite=Lax$/);
+    expect(secureCookie).toMatch(/; Secure/);
+  });
+
+  it("tells a refused Account the page isn't open to it", async () => {
+    const database = await freshDatabase();
+    const { customer } = await oneOfEachKind(database);
+    const sessions = createAccountSessions(database, { secret });
+    const request = requestWithCookieFrom(await sessions.startSession(customer));
+
+    const refusal = await thrownBy(sessions.requireAccount(request, "admin"));
+
+    expect(refusal.status).toBe(403);
+    expect(await refusal.text()).toBe("This page isn't open to your Account.");
   });
 
   it("refuses each kind of Account the other kinds' pages", async () => {
@@ -133,6 +157,10 @@ describe("account sessions", () => {
 
     expect(ended.status).toBe(302);
     expect(ended.headers.get("Location")).toBe("/");
+    // The browser drops the cookie: it is emptied, and expired.
+    expect(ended.headers.get("Set-Cookie")).toMatch(
+      /^__session=; Path=\/; Expires=Thu, 01 Jan 1970 00:00:00 GMT;/,
+    );
     expect(await sessions.currentAccount(requestWithCookieFrom(ended))).toBeNull();
   });
 

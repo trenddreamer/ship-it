@@ -20,8 +20,16 @@ export type CustomerSignUp = z.infer<typeof customerSignUpSchema>;
 export const vendorSignUpSchema = z.object({
   email,
   password: newPassword,
-  businessName: z.string().trim().min(1, { error: "Enter your business name." }).max(120),
-  description: z.string().trim().min(1, { error: "Describe your business." }).max(2000),
+  businessName: z
+    .string()
+    .trim()
+    .min(1, { error: "Enter your business name." })
+    .max(120, { error: "Keep your business name to 120 characters." }),
+  description: z
+    .string()
+    .trim()
+    .min(1, { error: "Describe your business." })
+    .max(2000, { error: "Keep your description to 2,000 characters." }),
 });
 export type VendorSignUp = z.infer<typeof vendorSignUpSchema>;
 
