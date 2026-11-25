@@ -1,4 +1,7 @@
+import { inspect } from "node:util";
+import { DrizzleQueryError, sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { MarketplaceDatabase } from "~/db/database";
 import { giveFeedback, loggingTracker } from "../server";
 import {
   addAccount,
@@ -22,6 +25,32 @@ async function titleFor(text: string) {
   const tracker = recordingTracker();
   await giveFeedback(database, tracker, { account, text, page, commit });
   return tracker.onlyIssue().title;
+}
+
+/** A database without the `feedback` table, and an Account with an id nothing else contains. */
+async function brokenRecord() {
+  const database = await freshDatabase();
+  const account = await addAccount(database, "someone@example.test", "customer", 48213);
+  await database.run(sql`drop table feedback`);
+  return { database, account };
+}
+
+/** Everything `console.error` was given, as the server log would show it. */
+function loggedLine() {
+  const calls = vi.mocked(console.error).mock.calls;
+  expect(calls).toHaveLength(1);
+  return calls[0]!.map((part) => (typeof part === "string" ? part : inspect(part))).join(" ");
+}
+
+/** A database whose every insert throws `error`. */
+function throwingDatabase(error: unknown) {
+  return {
+    insert: () => ({
+      values: async () => {
+        throw error;
+      },
+    }),
+  } as unknown as MarketplaceDatabase;
 }
 
 describe("giving Feedback", () => {
@@ -238,6 +267,90 @@ describe("giving Feedback", () => {
       await giveFeedback(database, recordingTracker(), input);
 
       expect(await feedbackRows(database)).toHaveLength(2);
+    });
+  });
+
+  describe("when recording fails after the issue has opened", () => {
+    const issueUrl = "https://github.com/trenddreamer/ship-it/issues/99";
+    const text = "Something is off here.";
+
+    it("still counts as sent, with the issue's URL, after one call to the tracker", async () => {
+      const { database, account } = await brokenRecord();
+      const tracker = recordingTracker(issueUrl);
+
+      const result = await giveFeedback(database, tracker, { account, text, page, commit });
+
+      expect(result).toStrictEqual({ kind: "sent", issueUrl });
+      expect(tracker.issues).toHaveLength(1);
+    });
+
+    it("logs the issue's URL and the real error, but not the Account", async () => {
+      const { database, account } = await brokenRecord();
+
+      await giveFeedback(database, recordingTracker(issueUrl), { account, text, page, commit });
+
+      const line = loggedLine();
+      expect(line).toMatch(
+        /^Feedback was sent but couldn't be recorded \(issue: https:\/\/github\.com\/trenddreamer\/ship-it\/issues\/99\):/,
+      );
+      expect(line).toContain("no such table: feedback");
+      expect(line).not.toContain(String(account.id));
+      expect(line).not.toContain(account.email);
+      expect(line).not.toContain("undefined");
+    });
+
+    it("leaves the URL out of the log, and the result, when the tracker has none", async () => {
+      const { database, account } = await brokenRecord();
+
+      const result = await giveFeedback(database, recordingTracker(), {
+        account,
+        text,
+        page,
+        commit,
+      });
+
+      expect(result).toStrictEqual({ kind: "sent" });
+      const line = loggedLine();
+      expect(line).toMatch(/^Feedback was sent but couldn't be recorded: /);
+      expect(line).not.toContain("undefined");
+      expect(line).not.toContain(String(account.id));
+    });
+
+    it("logs a query error with no cause by its query alone, without its params", async () => {
+      const { account } = await setUp();
+      const database = throwingDatabase(
+        new DrizzleQueryError('insert into "feedback" ("account_id") values (?)', [48213]),
+      );
+
+      const result = await giveFeedback(database, recordingTracker(issueUrl), {
+        account,
+        text,
+        page,
+        commit,
+      });
+
+      expect(result).toStrictEqual({ kind: "sent", issueUrl });
+      expect(console.error).toHaveBeenCalledWith(
+        `Feedback was sent but couldn't be recorded (issue: ${issueUrl}):`,
+        'Failed query: insert into "feedback" ("account_id") values (?)',
+      );
+    });
+
+    it("logs any other error as it is", async () => {
+      const { account } = await setUp();
+      const error = new Error("disk full");
+
+      await giveFeedback(throwingDatabase(error), recordingTracker(issueUrl), {
+        account,
+        text,
+        page,
+        commit,
+      });
+
+      expect(console.error).toHaveBeenCalledWith(
+        `Feedback was sent but couldn't be recorded (issue: ${issueUrl}):`,
+        error,
+      );
     });
   });
 
