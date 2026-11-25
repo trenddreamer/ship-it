@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { customerSignUpSchema, ensureFirstAdmin, signIn, signUpCustomer } from "../index";
-import { freshDatabase } from "./database";
+import { freshDatabase } from "~/db/fresh-database";
 
 const admin = { email: "admin@ship-it.example", password: "run the market" };
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { accounts } from "~/db/schema";
 import { signIn, signUpCustomer } from "../index";
-import { freshDatabase } from "./database";
+import { freshDatabase } from "~/db/fresh-database";
 
 describe("signing up as a Customer and signing in", () => {
   it("lets a new Customer sign in with the email and password they signed up with", async () => {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { findVendor, listApprovedVendors } from "~/modules/vendors";
 import { countUnread, openInbox } from "~/modules/notifications";
 import { ensureFirstAdmin, signIn, signUpCustomer, signUpVendor } from "../index";
-import { freshDatabase } from "./database";
+import { freshDatabase } from "~/db/fresh-database";
 
 const karoo = {
   email: "sipho@karoo.example",

@@ -1,16 +1,8 @@
-// Test fixture: a fresh in-memory libSQL Marketplace database, migrated like
-// the real one, plus small helpers to add Vendors and Products to it.
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
+// Test fixture: a fresh in-memory Marketplace database (from ~/db/fresh-database), plus small helpers to add Vendors and Products to it.
 import * as schema from "~/db/schema";
 import type { MarketplaceDatabase } from "~/db/database";
 
-export async function freshDatabase(): Promise<MarketplaceDatabase> {
-  const database = drizzle({ client: createClient({ url: ":memory:" }), schema });
-  await migrate(database, { migrationsFolder: "app/db/migrations" });
-  return database;
-}
+export { freshDatabase } from "~/db/fresh-database";
 
 export async function addVendor(
   database: MarketplaceDatabase,

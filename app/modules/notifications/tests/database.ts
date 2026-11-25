@@ -1,16 +1,8 @@
-// Test fixture: a fresh in-memory libSQL Marketplace database, migrated like
-// the real one, and Accounts to send Notifications to.
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
+// Test fixture: a fresh in-memory Marketplace database (from ~/db/fresh-database), and Accounts to send Notifications to.
 import * as schema from "~/db/schema";
 import type { MarketplaceDatabase } from "~/db/database";
 
-export async function freshDatabase(): Promise<MarketplaceDatabase> {
-  const database = drizzle({ client: createClient({ url: ":memory:" }), schema });
-  await migrate(database, { migrationsFolder: "app/db/migrations" });
-  return database;
-}
+export { freshDatabase } from "~/db/fresh-database";
 
 /** Adds an Account of this kind (a Vendor Account gets a Vendor too) and returns its id. */
 export async function addAccount(

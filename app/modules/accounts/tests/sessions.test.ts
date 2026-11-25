@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MarketplaceDatabase } from "~/db/database";
 import { ensureFirstAdmin, signIn, signUpCustomer, signUpVendor, type Account } from "../index";
 import { createAccountSessions, landingPath } from "../server";
-import { freshDatabase } from "./database";
+import { freshDatabase } from "~/db/fresh-database";
 
 const secret = "a test secret";
 const url = "http://marketplace.test/somewhere";

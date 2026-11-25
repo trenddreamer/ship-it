@@ -5,7 +5,7 @@ import {
   setDeliveryAddress,
   signUpCustomer,
 } from "../index";
-import { freshDatabase } from "./database";
+import { freshDatabase } from "~/db/fresh-database";
 
 const home = {
   street: "12 Long Street",
