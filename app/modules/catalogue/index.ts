@@ -14,3 +14,4 @@ export {
   type StopRefusal,
   type StopResult,
 } from "./lib/stop";
+export { stopSchema } from "./lib/stop-schema";

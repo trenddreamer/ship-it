@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { requireAccount } from "~/accounts.server";
 import { DueDeliveries } from "~/components/due-deliveries";
 import { ProductSubscriptions } from "~/components/product-subscriptions";
+import { StopLinks } from "~/components/stop-links";
 import { db } from "~/db/client.server";
 import { formatCalendarDate } from "~/modules/calendar";
 import { listVendorProducts } from "~/modules/catalogue";
@@ -95,6 +96,7 @@ export default function VendorPage({ loaderData }: Route.ComponentProps) {
                     {product.deliverySchedules.map((s) => scheduleLabels.get(s)).join(", ")}
                   </p>
                   <ProductSubscriptions subscriptions={subscriptions[product.id] ?? []} />
+                  <StopLinks product={product} />
                 </div>
                 <p className="shrink-0 text-right">
                   <span className="font-semibold">{product.price}</span>
