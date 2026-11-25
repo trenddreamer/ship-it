@@ -3,6 +3,7 @@ import { Form, Link, Outlet, useFetcher, useLocation, useMatches } from "react-r
 import { currentAccount } from "~/accounts.server";
 import { db } from "~/db/client.server";
 import { landingPath } from "~/modules/accounts/server";
+import { feedbackTextLength } from "~/modules/feedback";
 import { countUnread } from "~/modules/notifications";
 import type { Route } from "./+types/layout";
 import type { action as feedbackAction } from "./feedback";
@@ -142,8 +143,8 @@ function Feedback() {
               <textarea
                 name="text"
                 required
-                minLength={10}
-                maxLength={2000}
+                minLength={feedbackTextLength.min}
+                maxLength={feedbackTextLength.max}
                 rows={5}
                 className="mt-1 block w-full rounded border border-gray-300 p-2"
               />
