@@ -46,6 +46,7 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
           {account ? (
             <>
               {account.kind === "customer" && <Link to="/subscriptions">Your Subscriptions</Link>}
+              {account.kind === "customer" && <Link to="/charges">Your Charges</Link>}
               <Link to="/inbox">
                 Inbox
                 {unread > 0 && <span className="font-semibold"> ({unread} unread)</span>}

@@ -1,13 +1,21 @@
-import { Link } from "react-router";
+import { data, Link, redirect } from "react-router";
 import { requireAccount } from "~/accounts.server";
+import { ChargeList } from "~/components/charge-list";
 import { DueDeliveries } from "~/components/due-deliveries";
 import { ProductSubscriptions } from "~/components/product-subscriptions";
 import { db } from "~/db/client.server";
 import { formatCalendarDate } from "~/modules/calendar";
 import { deliveryScheduleOptions, listVendorProducts } from "~/modules/catalogue";
-import { listVendorDueDeliveries } from "~/modules/deliveries";
+import { listVendorCharges } from "~/modules/charges";
+import {
+  listVendorDueDeliveries,
+  shipDelivery,
+  shipDeliverySchema,
+  type ShipRefusal,
+} from "~/modules/deliveries";
 import { listVendorSubscriptions } from "~/modules/subscriptions";
 import { findVendor } from "~/modules/vendors";
+import { today } from "~/today.server";
 import type { Route } from "./+types/vendor";
 
 export function meta(_: Route.MetaArgs) {
@@ -29,12 +37,20 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (!vendor) throw new Response("Your Vendor wasn't found.", { status: 404 });
   // A rejected Vendor sees only that it was rejected.
   if (vendor.approvalStatus === "rejected") {
-    return { vendor, products: null, subscriptions: {}, dueDeliveries: [] };
+    return { vendor, products: null, subscriptions: {}, dueDeliveries: [], charges: [] };
   }
   const byProduct = await listVendorSubscriptions(db, account.vendorId);
   const due = await listVendorDueDeliveries(db, account.vendorId);
+  const charges = await listVendorCharges(db, account.vendorId);
   return {
     vendor,
+    charges: charges.map((charge) => ({
+      id: charge.id,
+      productName: charge.productName,
+      party: charge.customerEmail,
+      amount: charge.amount,
+      chargedOn: formatCalendarDate(charge.chargedOn),
+    })),
     dueDeliveries: due.map((delivery) => ({
       ...delivery,
       dueOn: formatCalendarDate(delivery.dueOn),
@@ -54,8 +70,27 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-export default function VendorPage({ loaderData }: Route.ComponentProps) {
-  const { vendor, products, subscriptions, dueDeliveries } = loaderData;
+const shipRefusals: Record<ShipRefusal, string> = {
+  "delivery-not-found": "That Delivery isn't one of yours.",
+  "already-shipped": "That Delivery was already marked shipped.",
+};
+
+/** Marks one of the Vendor's due Deliveries shipped, today, which charges the Customer. */
+export async function action({ request }: Route.ActionArgs) {
+  const account = await requireAccount(request, "vendor");
+  const vendor = await findVendor(db, account.vendorId);
+  if (vendor?.approvalStatus === "rejected") {
+    throw new Response("Your business was rejected, so it can't ship Deliveries.", { status: 403 });
+  }
+  const parsed = shipDeliverySchema.safeParse(Object.fromEntries(await request.formData()));
+  if (!parsed.success) return data({ formError: "Pick a Delivery to mark shipped." }, 400);
+  const result = await shipDelivery(db, account.vendorId, parsed.data.deliveryId, today());
+  if (result.ok) return redirect("/vendor");
+  return data({ formError: shipRefusals[result.error] }, 409);
+}
+
+export default function VendorPage({ loaderData, actionData }: Route.ComponentProps) {
+  const { vendor, products, subscriptions, dueDeliveries, charges } = loaderData;
   if (!products) {
     return (
       <main className="mx-auto max-w-3xl p-8">
@@ -106,7 +141,14 @@ export default function VendorPage({ loaderData }: Route.ComponentProps) {
         )}
       </section>
 
-      <DueDeliveries deliveries={dueDeliveries} />
+      <DueDeliveries deliveries={dueDeliveries} formError={actionData?.formError} />
+
+      <section aria-labelledby="charges-heading" className="mt-8">
+        <h2 id="charges-heading" className="text-xl font-semibold">
+          Charges
+        </h2>
+        <ChargeList charges={charges} empty="No Charges yet." />
+      </section>
     </main>
   );
 }

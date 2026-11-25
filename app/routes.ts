@@ -14,6 +14,7 @@ export default [
     route("delivery-address", "routes/delivery-address.tsx"),
     route("products/:productId/subscribe", "routes/subscribe.tsx"),
     route("subscriptions", "routes/subscriptions.tsx"),
+    route("charges", "routes/charges.tsx"),
   ]),
   route("jobs/create-due-deliveries", "routes/jobs.create-due-deliveries.ts"),
 ] satisfies RouteConfig;
