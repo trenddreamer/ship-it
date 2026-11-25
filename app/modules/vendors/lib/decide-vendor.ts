@@ -1,10 +1,17 @@
 import { and, eq } from "drizzle-orm";
 import { accounts, vendors } from "~/db/schema";
 import { sendNotification } from "~/modules/notifications";
+import { z } from "zod";
 import type { MarketplaceDatabase } from "./database";
 
+/** The Admin's decision form: which Vendor, and the approval status it gets. */
+export const vendorDecisionSchema = z.object({
+  vendorId: z.coerce.number().int().positive(),
+  decision: z.enum(["approved", "rejected"]),
+});
+
 /** An Admin's decision on a pending Vendor: the approval status it gets. */
-export type VendorDecision = { vendorId: number; decision: "approved" | "rejected" };
+export type VendorDecision = z.infer<typeof vendorDecisionSchema>;
 
 export type DecideVendorResult =
   { ok: true } | { ok: false; error: "not-found" | "already-decided" };
