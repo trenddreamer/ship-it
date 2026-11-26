@@ -1,17 +1,20 @@
 import { useRef, useState } from "react";
-import { Form, Link, Outlet, useFetcher, useLocation, useMatches } from "react-router";
+import { Link, NavLink, Outlet, useFetcher, useLocation, useMatches } from "react-router";
 import { currentAccount } from "~/accounts.server";
+import { AccountMenu } from "~/components/account-menu";
+import { InboxIcon, linkIcons } from "~/components/nav-icons";
 import { ThemeToggle } from "~/components/theme-toggle";
 import { db } from "~/db/client.server";
 import { landingPath } from "~/modules/accounts/server";
 import { feedbackTextLength } from "~/modules/feedback";
+import { headerNav } from "~/modules/navigation";
 import { countUnread } from "~/modules/notifications";
 import type { Route } from "./+types/layout";
 import type { action as feedbackAction } from "./feedback";
 
-// The layout every page sits in: a header with who is signed in, their
-// Inbox's unread count and the theme icon, and, for a signed-in Account, the
-// Feedback button.
+// The layout every page sits in: a header with the Account's own links, their
+// Inbox with its unread badge, an account menu and the theme icon, and, for a
+// signed-in Account, the Feedback button. The header fits a 320px phone.
 // Add things every signed-in page shows to this loader.
 export async function loader({ request }: Route.LoaderArgs) {
   const account = await currentAccount(request);
@@ -32,7 +35,13 @@ export function shouldRevalidate() {
   return true;
 }
 
-const kindNames = { customer: "Customer", vendor: "Vendor", admin: "Admin" } as const;
+// Header links are round, and shaded on hover and on the page they lead to.
+// A labelled one widens for its label once the label shows.
+const shaded = ({ isActive }: { isActive: boolean }) => (isActive ? "bg-line font-medium" : "");
+const labelled = (state: { isActive: boolean }) =>
+  `flex items-center gap-1.5 rounded-full p-2 hover:bg-line sm:px-3 ${shaded(state)}`;
+const iconOnly = (state: { isActive: boolean }) =>
+  `relative flex rounded-full p-2 hover:bg-line ${shaded(state)}`;
 
 export default function Layout({ loaderData }: Route.ComponentProps) {
   const { account } = loaderData;
@@ -40,36 +49,51 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
   // alongside the Inbox's, so it may have counted first. On the Inbox,
   // nothing is unread.
   const inInbox = useMatches().some((match) => match.id === "routes/inbox");
-  const unread = account && !inInbox ? account.unread : 0;
+  const nav = account && headerNav({ ...account, unread: inInbox ? 0 : account.unread });
   return (
     <>
       <header className="border-b border-line">
-        <nav className="mx-auto flex max-w-3xl items-center gap-4 px-8 py-3">
-          <Link to="/" className="font-semibold">
+        <nav className="mx-auto flex h-14 max-w-3xl items-center gap-0.5 px-3 sm:gap-1 sm:px-8">
+          <Link to="/" className="mr-auto font-semibold tracking-tight sm:text-lg">
             Marketplace
           </Link>
-          <span className="flex-1" />
-          {account ? (
+          {nav ? (
             <>
-              {account.kind === "customer" && <Link to="/subscriptions">Your Subscriptions</Link>}
-              {account.kind === "customer" && <Link to="/charges">Your Charges</Link>}
-              <Link to="/inbox">
-                Inbox
-                {unread > 0 && <span className="font-semibold"> ({unread} unread)</span>}
-              </Link>
-              <Link to={account.home}>
-                {account.email} ({kindNames[account.kind]})
-              </Link>
-              <Form method="post" action="/sign-out">
-                <button type="submit" className="underline">
-                  Sign out
-                </button>
-              </Form>
+              {nav.links.map(({ to, label, icon }) => {
+                const Icon = linkIcons[icon];
+                return (
+                  <NavLink key={to} to={to} title={label} className={labelled}>
+                    <Icon />
+                    <span className="sr-only sm:not-sr-only">{label}</span>
+                  </NavLink>
+                );
+              })}
+              <NavLink
+                to={nav.inbox.to}
+                aria-label={nav.inbox.label}
+                title={nav.inbox.label}
+                className={iconOnly}
+              >
+                <InboxIcon />
+                {nav.inbox.badge && (
+                  <span
+                    aria-hidden
+                    className="absolute right-0 top-0.5 min-w-[1.125rem] rounded-full bg-accent px-1 text-center text-[0.6875rem] font-semibold leading-[1.125rem] text-on-accent"
+                  >
+                    {nav.inbox.badge}
+                  </span>
+                )}
+              </NavLink>
+              <AccountMenu email={nav.account.email} kindName={nav.account.kindName} />
             </>
           ) : (
             <>
-              <Link to="/sign-in">Sign in</Link>
-              <Link to="/sign-up">Sign up</Link>
+              <Link to="/sign-in" className="rounded-full px-3 py-2 hover:bg-line">
+                Sign in
+              </Link>
+              <Link to="/sign-up" className="rounded-full bg-primary px-3 py-1.5 text-on-primary">
+                Sign up
+              </Link>
             </>
           )}
           <ThemeToggle />

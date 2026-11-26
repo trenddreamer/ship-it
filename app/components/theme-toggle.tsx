@@ -2,6 +2,7 @@
 // picked (a sun, a moon, or a screen for Match my device) and each click
 // moves on to the next: Match my device, Light, Dark, and round again.
 import { useFetcher, useRouteLoaderData } from "react-router";
+import { Icon } from "~/components/icon";
 import { nextThemeChoice, type ThemeChoice } from "~/modules/theme";
 
 // One fetcher, shared by key with useThemeChoice, so the page switches the
@@ -29,7 +30,7 @@ export function ThemeToggle() {
   const fetcher = useFetcher({ key: fetcherKey });
   const choice = useThemeChoice();
   const next = nextThemeChoice(choice);
-  const Icon = icons[choice];
+  const ChoiceIcon = icons[choice];
   return (
     <fetcher.Form method="post" action="/theme" className="flex">
       <input type="hidden" name="theme" value={next} />
@@ -37,9 +38,9 @@ export function ThemeToggle() {
         type="submit"
         aria-label={`Theme: ${labels[choice]}. Switch to ${labels[next]}.`}
         title={`Theme: ${labels[choice]} (click for ${labels[next]})`}
-        className="rounded-full p-1.5 hover:bg-line"
+        className="flex rounded-full p-2 hover:bg-line"
       >
-        <Icon />
+        <ChoiceIcon />
       </button>
     </fetcher.Form>
   );
@@ -47,56 +48,27 @@ export function ThemeToggle() {
 
 function Sun() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      aria-hidden
-    >
+    <Icon>
       <circle cx="12" cy="12" r="4" />
       <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-    </svg>
+    </Icon>
   );
 }
 
 function Moon() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
+    <Icon>
       <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-    </svg>
+    </Icon>
   );
 }
 
 function Screen() {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      width="18"
-      height="18"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
+    <Icon>
       <rect x="2" y="3" width="20" height="14" rx="2" />
       <path d="M8 21h8M12 17v4" />
-    </svg>
+    </Icon>
   );
 }
 

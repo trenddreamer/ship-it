@@ -1,6 +1,8 @@
 // Journey steps (see e2e/journey.test.ts, which runs them in order):
-// A visitor picks light or dark from the header, whatever the OS says.
+// A visitor picks light or dark from the header, whatever the OS says; the
+// header fits a phone; and its account menu works from the keyboard.
 import { expect, test, type Page } from "@playwright/test";
+import { demo, signIn, signOut } from "../helpers";
 
 // The theme's page background (app/modules/theme/theme.css) in each scheme.
 const lightPage = "rgb(255, 255, 255)";
@@ -40,5 +42,47 @@ export function themeSteps() {
 
     await pickNextTheme(page, "Match my device");
     await expect(body).toHaveCSS("background-color", lightPage);
+  });
+
+  test("the header fits a 320px phone, for a visitor and for a Customer", async ({ page }) => {
+    const width = 320;
+    await page.setViewportSize({ width, height: 640 });
+    // The header fits when its last icon, the theme's, keeps as much room to
+    // the right edge as the Marketplace link keeps to the left one.
+    async function expectHeaderFits() {
+      const first = await page
+        .getByRole("link", { name: "Marketplace", exact: true })
+        .boundingBox();
+      const last = await page.getByRole("button", { name: /^Theme:/ }).boundingBox();
+      expect(width - (last!.x + last!.width)).toBeGreaterThanOrEqual(first!.x);
+    }
+
+    await page.goto("/");
+    await expectHeaderFits();
+
+    await signIn(page, demo.customer);
+    await expect(page.getByRole("link", { name: "Charges", exact: true })).toBeVisible();
+    await expectHeaderFits();
+    await signOut(page);
+  });
+
+  test("the account menu closes on Esc and when focus leaves it", async ({ page }) => {
+    await signIn(page, demo.customer);
+    const menu = page.getByRole("button", { name: "Account menu" });
+
+    await menu.click();
+    await expect(page.getByText(demo.customer.email)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await expect(menu).toBeFocused();
+
+    await menu.click();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeHidden();
+
+    await signOut(page);
   });
 }

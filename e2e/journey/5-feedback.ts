@@ -8,7 +8,7 @@ export function feedbackSteps() {
     page,
   }) => {
     await signIn(page, newCustomer);
-    await page.getByRole("link", { name: "Your Subscriptions" }).click();
+    await page.getByRole("link", { name: "Subscriptions", exact: true }).click();
     await page.getByRole("button", { name: "Feedback" }).click();
     const dialog = page.getByRole("dialog", { name: "Feedback" });
     await dialog

@@ -40,6 +40,8 @@
 
   /* Something new, such as an unread Notification. */
   --color-accent: light-dark(#1d4ed8, #93c5fd);
+  /* Text on an accent background, such as the Inbox's unread badge. */
+  --color-on-accent: light-dark(#ffffff, #111827);
 }
 
 :root {

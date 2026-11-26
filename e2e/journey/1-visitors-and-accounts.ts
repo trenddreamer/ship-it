@@ -116,7 +116,7 @@ export function visitorAndAccountSteps() {
     expect((await page.goto("/vendor"))?.status()).toBe(403);
 
     await page.goto("/");
-    await page.getByRole("link", { name: "Your Subscriptions" }).click();
+    await page.getByRole("link", { name: "Subscriptions", exact: true }).click();
     await expect(page.getByRole("heading", { level: 2 })).toHaveText([
       "Free-range eggs (30)",
       "House espresso blend (500 g)",
@@ -130,18 +130,18 @@ export function visitorAndAccountSteps() {
     await signIn(page, demo.admin);
     const inbox = page.getByRole("link", { name: /^Inbox/ });
     // The seed's Vendor sign-ups notified the Admin too, so more than one is unread.
-    await expect(inbox).toHaveText(/^Inbox \(\d+ unread\)$/);
+    await expect(inbox).toHaveAccessibleName(/^Inbox \(\d+ unread\)$/);
 
     await inbox.click();
     await expect(page).toHaveURL(/\/inbox$/);
     await expect(page.getByRole("listitem").first()).toContainText(
       "Cederberg Rooibos signed up as a Vendor and is awaiting approval.",
     );
-    await expect(inbox).toHaveText("Inbox");
+    await expect(inbox).toHaveAccessibleName("Inbox");
 
     await page.getByRole("link", { name: "Marketplace", exact: true }).click();
     await expect(page).toHaveURL(/\/$/);
-    await expect(inbox).toHaveText("Inbox");
+    await expect(inbox).toHaveAccessibleName("Inbox");
     await signOut(page);
 
     await signIn(page, demo.customer);
