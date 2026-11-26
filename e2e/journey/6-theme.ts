@@ -1,6 +1,6 @@
 // Journey steps (see e2e/journey.test.ts, which runs them in order):
-// A visitor picks light or dark from the header, whatever the OS says, and
-// the header fits a phone.
+// A visitor picks light or dark from the header, whatever the OS says; the
+// header fits a phone; and its account menu works from the keyboard.
 import { expect, test, type Page } from "@playwright/test";
 import { demo, signIn, signOut } from "../helpers";
 
@@ -63,6 +63,26 @@ export function themeSteps() {
     await signIn(page, demo.customer);
     await expect(page.getByRole("link", { name: "Charges", exact: true })).toBeVisible();
     await expectHeaderFits();
+    await signOut(page);
+  });
+
+  test("the account menu closes on Esc and when focus leaves it", async ({ page }) => {
+    await signIn(page, demo.customer);
+    const menu = page.getByRole("button", { name: "Account menu" });
+
+    await menu.click();
+    await expect(page.getByText(demo.customer.email)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await expect(menu).toBeFocused();
+
+    await menu.click();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByRole("button", { name: "Sign out" })).toBeHidden();
+
     await signOut(page);
   });
 }

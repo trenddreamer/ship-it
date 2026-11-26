@@ -1,6 +1,6 @@
 // The account menu at the end of the header: a person icon that opens a
 // panel with who is signed in, their Account type, and Sign out. A click
-// outside it or Esc closes it.
+// outside it, Esc, or tabbing out of it closes it.
 import { useEffect, useId, useRef, useState } from "react";
 import { Form } from "react-router";
 import { PersonIcon } from "~/components/nav-icons";
@@ -30,7 +30,16 @@ export function AccountMenu({ email, kindName }: { email: string; kindName: stri
   }, [open]);
 
   return (
-    <div ref={root} className="relative">
+    <div
+      ref={root}
+      className="relative"
+      onBlur={(event) => {
+        // Focus going nowhere (a click on the panel's text) leaves it open;
+        // a click outside is closeOnOutsideClick's.
+        const to = event.relatedTarget;
+        if (to && !event.currentTarget.contains(to)) setOpen(false);
+      }}
+    >
       <button
         ref={button}
         type="button"
