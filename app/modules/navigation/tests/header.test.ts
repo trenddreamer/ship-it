@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { headerNav } from "../index";
 
-const customer = { email: "customer@ship-it.test", kind: "customer", unread: 0 } as const;
+const customer = {
+  email: "customer@ship-it.test",
+  kind: "customer",
+  home: "/",
+  unread: 0,
+} as const;
 
 describe("headerNav", () => {
   it("gives a Customer short links to their Subscriptions and Charges", () => {
@@ -12,11 +17,17 @@ describe("headerNav", () => {
   });
 
   it("gives a Vendor and an Admin a link to the page they land on", () => {
-    expect(headerNav({ ...customer, kind: "vendor" }).links).toEqual([
+    expect(headerNav({ ...customer, kind: "vendor", home: "/vendor" }).links).toEqual([
       { to: "/vendor", label: "Vendor page", icon: "vendor" },
     ]);
-    expect(headerNav({ ...customer, kind: "admin" }).links).toEqual([
+    expect(headerNav({ ...customer, kind: "admin", home: "/admin" }).links).toEqual([
       { to: "/admin", label: "Admin", icon: "admin" },
+    ]);
+  });
+
+  it("follows the page an Account lands on, wherever that is", () => {
+    expect(headerNav({ ...customer, kind: "vendor", home: "/elsewhere" }).links).toEqual([
+      { to: "/elsewhere", label: "Vendor page", icon: "vendor" },
     ]);
   });
 

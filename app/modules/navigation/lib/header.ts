@@ -24,13 +24,16 @@ export interface HeaderNav {
   account: { email: string; kind: string };
 }
 
-const linksByKind: Record<AccountKind, HeaderLink[]> = {
-  customer: [
+// A Customer lands on the Marketplace, which the header always links to, so
+// their links go elsewhere. A Vendor or an Admin gets a link to the page they
+// land on, `home`.
+const linksByKind: Record<AccountKind, (home: string) => HeaderLink[]> = {
+  customer: () => [
     { to: "/subscriptions", label: "Subscriptions", icon: "subscriptions" },
     { to: "/charges", label: "Charges", icon: "charges" },
   ],
-  vendor: [{ to: "/vendor", label: "Vendor page", icon: "vendor" }],
-  admin: [{ to: "/admin", label: "Admin", icon: "admin" }],
+  vendor: (home) => [{ to: home, label: "Vendor page", icon: "vendor" }],
+  admin: (home) => [{ to: home, label: "Admin", icon: "admin" }],
 };
 
 const kindNames: Record<AccountKind, string> = {
@@ -45,16 +48,18 @@ const badgeLimit = 9;
 /**
  * What the header shows a signed-in Account: the same pattern for every
  * Account type (its own links, the Inbox with an unread badge, and an account
- * menu with its email and type), so only the links differ.
+ * menu with its email and type), so only the links differ. `home` is the
+ * page the Account lands on after signing in (`landingPath`).
  */
 export function headerNav(account: {
   email: string;
   kind: AccountKind;
+  home: string;
   unread: number;
 }): HeaderNav {
   const { unread } = account;
   return {
-    links: linksByKind[account.kind],
+    links: linksByKind[account.kind](account.home),
     inbox: {
       to: "/inbox",
       label: unread > 0 ? `Inbox (${unread} unread)` : "Inbox",
