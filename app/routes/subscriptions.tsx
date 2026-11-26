@@ -24,8 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const address = await findDeliveryAddress(db, account.id);
   const subscriptions = await listCustomerSubscriptions(db, account.id);
   return {
-    address:
-      address && [address.street, address.suburb, address.city, address.postalCode].join(", "),
+    address: address && [address.street, address.city, address.postalCode].join(", "),
     subscriptions: subscriptions.map((subscription) => ({
       ...subscription,
       schedule: deliveryScheduleLabel(subscription.deliverySchedule),
