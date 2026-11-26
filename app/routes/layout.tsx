@@ -84,7 +84,7 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
                   </span>
                 )}
               </NavLink>
-              <AccountMenu email={nav.account.email} kind={nav.account.kind} />
+              <AccountMenu email={nav.account.email} kindName={nav.account.kindName} />
             </>
           ) : (
             <>

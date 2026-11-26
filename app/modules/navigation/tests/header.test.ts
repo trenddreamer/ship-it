@@ -34,10 +34,10 @@ describe("headerNav", () => {
   it("names who is signed in, and their Account type, for the account menu", () => {
     expect(headerNav(customer).account).toEqual({
       email: "customer@ship-it.test",
-      kind: "Customer",
+      kindName: "Customer",
     });
-    expect(headerNav({ ...customer, kind: "vendor" }).account.kind).toBe("Vendor");
-    expect(headerNav({ ...customer, kind: "admin" }).account.kind).toBe("Admin");
+    expect(headerNav({ ...customer, kind: "vendor" }).account.kindName).toBe("Vendor");
+    expect(headerNav({ ...customer, kind: "admin" }).account.kindName).toBe("Admin");
   });
 
   it("shows the Inbox with no badge when nothing is unread", () => {

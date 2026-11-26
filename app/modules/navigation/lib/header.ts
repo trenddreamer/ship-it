@@ -21,7 +21,7 @@ export interface HeaderNav {
     badge: string | null;
   };
   /** Who is signed in, for the account menu. */
-  account: { email: string; kind: string };
+  account: { email: string; kindName: string };
 }
 
 // A Customer lands on the Marketplace, which the header always links to, so
@@ -65,6 +65,6 @@ export function headerNav(account: {
       label: unread > 0 ? `Inbox (${unread} unread)` : "Inbox",
       badge: unread <= 0 ? null : unread > badgeLimit ? `${badgeLimit}+` : String(unread),
     },
-    account: { email: account.email, kind: kindNames[account.kind] },
+    account: { email: account.email, kindName: kindNames[account.kind] },
   };
 }

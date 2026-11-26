@@ -5,7 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Form } from "react-router";
 import { PersonIcon } from "~/components/nav-icons";
 
-export function AccountMenu({ email, kind }: { email: string; kind: string }) {
+export function AccountMenu({ email, kindName }: { email: string; kindName: string }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
@@ -52,7 +52,7 @@ export function AccountMenu({ email, kind }: { email: string; kind: string }) {
           <p className="truncate font-medium" title={email}>
             {email}
           </p>
-          <p className="text-sm text-muted">{kind}</p>
+          <p className="text-sm text-muted">{kindName}</p>
         </div>
         <hr className="my-1 border-line" />
         <Form method="post" action="/sign-out">
