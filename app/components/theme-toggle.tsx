@@ -37,7 +37,7 @@ export function ThemeToggle() {
         type="submit"
         aria-label={`Theme: ${labels[choice]}. Switch to ${labels[next]}.`}
         title={`Theme: ${labels[choice]} (click for ${labels[next]})`}
-        className="rounded-full p-1.5 hover:bg-line"
+        className="flex rounded-full p-2 hover:bg-line"
       >
         <Icon />
       </button>
@@ -49,8 +49,8 @@ function Sun() {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="18"
-      height="18"
+      width="20"
+      height="20"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -67,8 +67,8 @@ function Moon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="18"
-      height="18"
+      width="20"
+      height="20"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
@@ -85,8 +85,8 @@ function Screen() {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="18"
-      height="18"
+      width="20"
+      height="20"
       fill="none"
       stroke="currentColor"
       strokeWidth="2"

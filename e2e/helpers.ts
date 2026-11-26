@@ -121,7 +121,9 @@ export async function signIn(page: Page, account: { email: string; password: str
   await expect(page).not.toHaveURL(/\/sign-in$/);
 }
 
+/** Signs out through the account menu at the end of the header. */
 export async function signOut(page: Page) {
+  await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 }

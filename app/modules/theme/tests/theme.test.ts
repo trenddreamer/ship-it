@@ -106,6 +106,7 @@ describe("the theme", () => {
     ["danger", "danger-soft"],
     ["ink", "warning-soft"],
     ["accent", "surface"],
+    ["on-accent", "accent"],
   ];
   for (const scheme of ["light", "dark"] as const) {
     for (const [text, background] of textPairs) {

@@ -48,7 +48,7 @@ export function deliveryAndPriceSteps() {
     await expect(page.getByRole("listitem").first()).toContainText(
       `Cederberg Rooibos shipped your Rooibos chai (100 g), due ${johannesburgTomorrow()}. You were charged R 65,50.`,
     );
-    await page.getByRole("link", { name: "Your Charges" }).click();
+    await page.getByRole("link", { name: "Charges", exact: true }).click();
     const charges = page.getByRole("main").getByRole("listitem");
     await expect(charges).toHaveCount(1);
     await expect(charges).toContainText("Rooibos chai (100 g)From Cederberg Rooibos");
@@ -114,7 +114,7 @@ export function deliveryAndPriceSteps() {
     await signOut(page);
 
     await signIn(page, demo.customer);
-    await page.getByRole("link", { name: "Your Charges" }).click();
+    await page.getByRole("link", { name: "Charges", exact: true }).click();
     await expect(page.getByRole("main").getByRole("listitem").first()).toContainText(
       `${chai}From Cederberg Rooibos`,
     );
