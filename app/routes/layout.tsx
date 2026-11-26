@@ -13,8 +13,8 @@ import type { Route } from "./+types/layout";
 import type { action as feedbackAction } from "./feedback";
 
 // The layout every page sits in: a header with the Account's own links, their
-// Inbox with its unread badge, an account menu and the theme icon, and, for a signed-in Account, the
-// Feedback button.
+// Inbox with its unread badge, an account menu and the theme icon, and, for a
+// signed-in Account, the Feedback button. The header fits a 320px phone.
 // Add things every signed-in page shows to this loader.
 export async function loader({ request }: Route.LoaderArgs) {
   const account = await currentAccount(request);
@@ -53,8 +53,8 @@ export default function Layout({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <header className="border-b border-line">
-        <nav className="mx-auto flex h-14 max-w-3xl items-center gap-1 px-4 sm:px-8">
-          <Link to="/" className="mr-auto text-lg font-semibold tracking-tight">
+        <nav className="mx-auto flex h-14 max-w-3xl items-center gap-0.5 px-3 sm:gap-1 sm:px-8">
+          <Link to="/" className="mr-auto font-semibold tracking-tight sm:text-lg">
             Marketplace
           </Link>
           {nav ? (
