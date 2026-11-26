@@ -1,24 +1,6 @@
-// The header's icons: line drawings in the text colour, hidden from screen
-// readers (the link or button around each one carries its name).
+// The header's icons, each drawn in the shared Icon frame.
+import { Icon } from "~/components/icon";
 import type { HeaderIcon } from "~/modules/navigation";
-
-function Icon({ children }: { children: React.ReactNode }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="20"
-      height="20"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      {children}
-    </svg>
-  );
-}
 
 /** Two arrows chasing each other: something that repeats. */
 function Subscriptions() {
