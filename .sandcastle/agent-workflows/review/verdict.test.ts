@@ -30,7 +30,7 @@ describe("verdictOutcome", () => {
   it("finds no verdict when the run wrote none", () => {
     expect(
       verdictOutcome(
-        "The review run produced no verdict. See the logs. Re-add `agent:review` to retry.\n",
+        "The review run produced no verdict. See the logs. Add `agent:review` to its Ticket to retry.\n",
       ),
     ).toBe("none");
   });
