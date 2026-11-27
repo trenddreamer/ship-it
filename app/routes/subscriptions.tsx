@@ -2,7 +2,7 @@ import { data, Form, Link, redirect } from "react-router";
 import { requireAccount } from "~/accounts.server";
 import { FormError } from "~/components/text-field";
 import { db } from "~/db/client.server";
-import { findDeliveryAddress } from "~/modules/accounts";
+import { deliveryAddressLine, findDeliveryAddress } from "~/modules/accounts";
 import { formatCalendarDate } from "~/modules/calendar";
 import { deliveryScheduleLabel } from "~/modules/deliveries";
 import {
@@ -24,7 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const address = await findDeliveryAddress(db, account.id);
   const subscriptions = await listCustomerSubscriptions(db, account.id);
   return {
-    address: address && [address.street, address.city, address.postalCode].join(", "),
+    address: address && deliveryAddressLine(address),
     subscriptions: subscriptions.map((subscription) => ({
       ...subscription,
       schedule: deliveryScheduleLabel(subscription.deliverySchedule),
