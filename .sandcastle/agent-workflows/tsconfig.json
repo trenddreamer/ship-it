@@ -3,6 +3,8 @@
   "include": ["**/*.ts"],
   "compilerOptions": {
     "types": ["node"],
+    // The scripts run on Node 22, which has ES2023's `Array#toSorted`.
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
     // So a script Node runs as it is, with no `npm ci`, can import another:
     // Node needs the `.ts` on the path. route/route-tickets.ts does.
     "allowImportingTsExtensions": true

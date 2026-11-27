@@ -1,11 +1,28 @@
-name: Agent — Explore The Tickets
+name: Factory — Explore The Tickets
 
 # The third workflow in the software factory, and the one that runs first.
+# A shared workflow: it lives in the Home repo and runs inside an Enrolled
+# repo (ADR-0003).
 #
-# WHAT TRIGGERS IT
-#   Someone puts the `agent:explore` label on an issue. The run then ignores
-#   which issue that was. It explores EVERY open issue labelled
-#   `agent:explore`, together, as one batch.
+# WHAT STARTS IT
+#   Nothing starts it on its own. An Enrolled repo's caller workflow calls it
+#   (for the Marketplace, still in ship-it: .github/workflows/factory.yml),
+#   and the Home repo's routing job, .github/workflows/agent-route.yml,
+#   dispatches that caller with `task=explore` and a batch of Tickets.
+#
+#   The routing job has already done the rest before this starts: routed
+#   every open `agent:explore` Ticket through the Registry, refused the
+#   ones it can't route, grouped the rest by Enrolled repo, and claimed each
+#   batch (`agent:explore` off, `agent:in-progress` on). So a batch only ever
+#   holds Tickets for this repo, and this workflow explores exactly the
+#   Tickets it was given.
+#
+# WHICH REPO IS WHICH
+#   It runs in the Enrolled repo, so `github.repository` is the Enrolled
+#   repo: the code it checks out and the run page the Ticket links to. The
+#   Tickets live in the Home repo, HOME_REPO below, and every `gh` call
+#   about them says so with `-R` or `repos/$HOME_REPO`. The agent scripts
+#   come from the Home repo's `main` too, cloned outside the workspace.
 #
 # WHY A BATCH
 #   Tickets arrive in clumps, and a clump has duplicates in it: the same bug
@@ -26,10 +43,10 @@ name: Agent — Explore The Tickets
 #
 #   Read where the Factory App's token goes before you read anything else. It
 #   is the enforcement, not the description. The prompt asks the agent to
-#   stay read-only. In the explore job the token goes to the three steps
-#   that list, route and claim the batch. They run before the agent exists,
-#   and run nothing but `gh`, `jq`, `yq` and the routing script from the
-#   checkout. The token can touch issues and nothing else.
+#   stay read-only. In the explore job the token goes to the steps that
+#   clone the agent scripts and read the batch. They run before the agent
+#   exists, and run nothing but `git`, `gh` and `jq`. The token can read
+#   code and touch issues, and nothing else.
 #   The job's own GITHUB_TOKEN can read the code and nothing else. So the
 #   agent has nothing to write with.
 #
@@ -44,9 +61,9 @@ name: Agent — Explore The Tickets
 #   .sandcastle/agent-workflows/explore/plan-schema.ts, and the apply job
 #   branches on it:
 #
-#     easy-call       →  swap `agent:explore` for `agent:implement`, which is
-#                        the trigger for agent-implement.yml. The factory
-#                        keeps going without being asked.
+#     easy-call       →  swap `agent:in-progress` for `agent:implement`,
+#                        which is the trigger for agent-implement.yml. The
+#                        factory keeps going without being asked.
 #     anything else   →  swap it for `needs-a-human` and stop. Somebody has
 #                        to come and look.
 #     a duplicate     →  closed, whatever its tag.
@@ -56,71 +73,84 @@ name: Agent — Explore The Tickets
 #   workflow does not recognise is refused whole: nothing is written, the run
 #   goes red, and every issue in the batch is marked `agent:blocked`.
 #
-# ROUTED FIRST
-#   Every open `agent:explore` issue is routed through the Registry,
-#   repos.yml, before it joins the batch (ADR-0002). One with no `repo:`
-#   label, more than one, or one the Registry doesn't list is refused: it gets
-#   one comment with the reason, loses `agent:explore`, and is marked
-#   `agent:blocked`. The rest are the batch. See
-#   .github/actions/route-tickets/action.yml.
-#
 # THE LABELS WHILE IT RUNS
-#   When the batch is claimed, each issue swaps `agent:explore` for
-#   `agent:in-progress`. Apply swaps `agent:in-progress` for the issue's next
-#   label. If the run fails, the apply job's last steps mark every issue
-#   still in progress `agent:blocked`; re-add `agent:explore` to retry. They
-#   run even when the explore job failed, which is why apply waits on explore
-#   with `always()` and skips its plan steps unless explore succeeded.
+#   The routing job claimed the batch: each Ticket is `agent:in-progress`.
+#   Apply swaps that for the Ticket's next label. If the run fails, the
+#   apply job's last steps mark every Ticket still in progress
+#   `agent:blocked`; re-add `agent:explore` to retry. They run even when the
+#   explore job failed, which is why apply waits on explore with `always()`
+#   and skips its plan steps unless explore succeeded.
 #
 # THE AGENT
 #   A Sandcastle script: .sandcastle/agent-workflows/explore/explore.ts, with
-#   its prompt next to it in prompt.md.
+#   its prompt next to it in prompt.md. It runs from the Home repo's clone,
+#   with the Enrolled repo's checkout as its working directory, so the agent
+#   explores the Enrolled repo's code.
 #
-# WHAT IT NEEDS
+# WHAT IT NEEDS (passed by the caller, never inherited)
+#   inputs.tickets — the batch, a JSON array of Ticket numbers in the Home
+#     repo, e.g. `[12, 13]`.
+#   inputs.install, inputs.seed, inputs.check — the Enrolled repo's Contract.
+#     Explore runs `install`, so the agent can run the code. It reads, so it
+#     neither seeds nor checks; it takes all three so every shared workflow
+#     takes the same Contract.
 #   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token.
 #   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory
 #     App (ADR-0004). Each job's first step mints a token from them with
 #     actions/create-github-app-token, and only that step sees the key. The
-#     token is new for each job, covers this repository only, carries
-#     Issues: read/write and nothing else, and is revoked when the job ends.
-#     Every call this workflow makes to GitHub uses it: listing the batch,
-#     posting the findings, moving the labels, closing duplicates. So the
-#     findings and labels show as the Factory's bot, `<slug>[bot]`, not as
-#     the Owner.
-#     One hop is why a token other than the built-in one is needed at all. A
-#     label applied with the built-in GITHUB_TOKEN does NOT start another
-#     workflow. GitHub suppresses that on purpose, so a workflow cannot
-#     trigger itself into a loop. The chain from explore to implement is
-#     exactly the loop we do want, so `agent:implement` has to go on with a
-#     token that is not the built-in one. An App's token does start it.
+#     token is new for each job, covers the Home repo and this Enrolled repo
+#     and nothing else, carries only the permissions that job needs, and is
+#     revoked when the job ends. So the findings and labels show as the
+#     Factory's bot, `<slug>[bot]`, not as the Owner.
+#     A label applied with the built-in GITHUB_TOKEN does NOT start another
+#     workflow. The chain from explore to implement needs `agent:implement`
+#     to start one, so it goes on with the App's token, which does.
 #   secrets.GITHUB_TOKEN — supplied by Actions, and used only to check the
-#     code out. Scoped per job below.
-#   The `agent:explore` label. A fresh clone of this repository does not have
-#     it, and no workflow can create the label that starts it. Create it once:
-#       gh label create "agent:explore" --color 5319E7 \
-#         --description "The factory explores this ticket"
+#     Enrolled repo's code out. The caller's job sets its permissions.
 
 on:
-  issues:
-    types: [labeled]
+  workflow_call:
+    inputs:
+      tickets:
+        description: The batch, a JSON array of Ticket numbers in the Home repo.
+        type: string
+        required: true
+      install:
+        description: The Contract's install command, run at the Enrolled repo's root.
+        type: string
+        required: true
+      seed:
+        description: The Contract's seed command. Explore doesn't seed.
+        type: string
+        required: true
+      check:
+        description: The Contract's check command. Explore doesn't check.
+        type: string
+        required: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      FACTORY_APP_ID:
+        required: true
+      FACTORY_APP_PRIVATE_KEY:
+        required: true
 
-# One batch at a time, and never cancelled. A label that lands mid-run queues
-# one more run behind this one, and that run lists the batch again when it
-# starts. The issues this run took are `agent:in-progress` by then, so that
-# batch is only what was labelled mid-run, and nothing is lost. Every other
-# label gets a throwaway group of its own, so it can never bump that queued run.
-concurrency:
-  group: ${{ github.event.label.name == 'agent:explore' && 'agent-explore' || format('ignore-{0}', github.run_id) }}
-  cancel-in-progress: false
+# No concurrency group. Each batch was claimed before it was dispatched, so
+# two explore runs never share a Ticket, and both only read. A group would
+# also be a trap: GitHub keeps one pending run per group and cancels the
+# others, and a cancelled run would leave its batch `agent:in-progress`.
+
+env:
+  # Where the Tickets live, and where the agent scripts come from.
+  HOME_REPO: trenddreamer/ship-it
 
 jobs:
   explore:
-    if: github.event.label.name == 'agent:explore'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     permissions:
-      contents: read # the checkout. The tickets are read with the App's token.
+      contents: read # the Enrolled checkout. The Tickets are read with the App's token.
 
     # The batch it was given, and the plan it came back with. The apply job
     # reads both.
@@ -128,56 +158,51 @@ jobs:
       batch: ${{ steps.batch.outputs.numbers }}
       plan: ${{ steps.plan.outputs.json }}
 
-    env:
-      GH_REPO: ${{ github.repository }}
-
     steps:
       - name: Mint the Factory App's token
         # First, before anything else runs, and the only step that sees the
-        # private key. The token covers this repository (the default when
-        # `owner` and `repositories` are unset) with Issues: read/write only.
+        # private key. The token covers the Home repo and this Enrolled repo
+        # (once, while they are the same repo), with Issues: read/write for
+        # the Tickets and Contents: read for the agent scripts.
         id: app
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          owner: trenddreamer
+          repositories: ${{ github.event.repository.name == 'ship-it' && 'ship-it' || format('ship-it,{0}', github.event.repository.name) }}
           permission-issues: write
+          permission-contents: read
 
-      - name: Checkout
+      - name: Check out the Enrolled repo
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: List the open Tickets
-        id: open
+      - name: Clone the agent scripts from the Home repo
+        # Into $RUNNER_TEMP/factory, outside the workspace, so the agent's
+        # `git status` in the Enrolled repo never sees them. actions/checkout
+        # can't write outside the workspace, so this is a plain clone. The
+        # token goes in a one-off header, never into .git/config.
         env:
-          # The token, before the agent exists. Nothing after the batch is
-          # claimed gets it.
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
-          # Labels often go on several at once. Let them all land.
-          sleep 5
-          echo "numbers=$(gh issue list --state open --label "agent:explore" --limit 100 \
-            --json number --jq '[.[].number] | sort' )" >> "$GITHUB_OUTPUT"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            clone --depth 1 --branch main --filter=blob:none --sparse \
+            "https://github.com/${HOME_REPO}.git" "$RUNNER_TEMP/factory"
+          # The root files (package.json, the lockfile) come with the cone.
+          git -C "$RUNNER_TEMP/factory" \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            sparse-checkout set .sandcastle
 
-      - name: Route the Tickets
-        # Through the Registry, repos.yml. A Ticket it refuses gets the reason
-        # on it, loses `agent:explore` and is marked `agent:blocked`; it is not
-        # in the batch. The rest carry on.
-        id: route
-        if: steps.open.outputs.numbers != '[]'
-        uses: ./.github/actions/route-tickets
-        with:
-          tickets: ${{ steps.open.outputs.numbers }}
-          trigger: agent:explore
-          token: ${{ steps.app.outputs.token }}
-
-      - name: Claim the batch
+      - name: Read the batch
         id: batch
         env:
+          # The token, before the agent exists. Nothing after this gets it.
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          ROUTED: ${{ steps.route.outputs.routed || '[]' }}
+          TICKETS: ${{ inputs.tickets }}
         run: |
           set -euo pipefail
           # Titles and bodies are written by whoever opened the issue, so they
@@ -185,46 +210,46 @@ jobs:
           # Actions expression. The agent reads the file. The comments come
           # from the REST API, which says which are a bot's, and are filtered
           # once Node is installed (see "Keep the comments that may steer").
-          # Exactly the Tickets routed above: one labelled since is left for
-          # the next run, which routes it first.
+          # A Ticket closed since it was claimed is left out.
           mkdir -p /tmp/explore/comments
-          for n in $(jq -r '.[]' <<< "$ROUTED"); do
-            gh issue view "$n" --json number,title,body,createdAt
-          done | jq -s 'sort_by(.number)' > /tmp/explore/batch.json
+          for n in $(jq -r '.[]' <<< "$TICKETS"); do
+            gh issue view "$n" -R "$HOME_REPO" --json number,title,body,createdAt,state
+          done | jq -s 'map(select(.state == "OPEN") | del(.state)) | sort_by(.number)' \
+            > /tmp/explore/batch.json
 
           numbers="$(jq -c '[.[].number] | sort' /tmp/explore/batch.json)"
           for n in $(jq -r '.[]' <<< "$numbers"); do
-            gh api --paginate "repos/$GH_REPO/issues/$n/comments" --jq '.[]' \
+            gh api --paginate "repos/$HOME_REPO/issues/$n/comments" --jq '.[]' \
               | jq -s . > "/tmp/explore/comments/$n.json"
           done
           echo "Batch: $numbers"
           echo "numbers=$numbers" >> "$GITHUB_OUTPUT"
 
-          # The trigger comes off, so putting it back on is how you retry.
-          # `agent:in-progress` stays on until apply moves the issue on.
-          if [ "$numbers" != "[]" ]; then
-            # A fresh clone of this repository does not have these labels yet.
-            gh label create "agent:in-progress" --color FBCA04 \
-              --description "An agent is working on this right now" || true
-            gh label create "agent:blocked" --color B60205 \
-              --description "An agent run failed here. Its comment says how to retry" || true
-          fi
-          for n in $(jq -r '.[]' <<< "$numbers"); do
-            gh issue edit "$n" --remove-label "agent:explore" || true
-            gh issue edit "$n" --remove-label "agent:blocked" || true
-            gh issue edit "$n" --add-label "agent:in-progress"
-          done
-
       - name: Setup Node.js 22
+        # Before anything runs Node or npm. No npm cache: setup-node only
+        # hashes lockfiles inside the workspace, and the agent scripts' one
+        # is in the Home repo's clone, outside it. The Enrolled repo's own
+        # install is its Contract's business.
         if: steps.batch.outputs.numbers != '[]'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: npm
 
-      - name: Install dependencies
+      - name: Install the agent scripts' dependencies
+        # Sandcastle, zod and tsx, from the Home repo's lockfile. HUSKY=0: no
+        # git hooks in a clone nobody commits to.
         if: steps.batch.outputs.numbers != '[]'
+        working-directory: ${{ runner.temp }}/factory
+        env:
+          HUSKY: "0"
         run: npm ci
+
+      - name: Install the Enrolled repo (the Contract's install)
+        # Through env, never pasted into the script: the Contract is text.
+        if: steps.batch.outputs.numbers != '[]'
+        env:
+          INSTALL: ${{ inputs.install }}
+        run: bash -euo pipefail -c "$INSTALL"
 
       - name: Install Claude Code
         if: steps.batch.outputs.numbers != '[]'
@@ -253,20 +278,23 @@ jobs:
           agent-browser install
 
       - name: Keep the comments that may steer the agent
-        # A comment goes in only when its author has write access to this
+        # A comment goes in only when its author has write access to the Home
         # repo, or it is the Factory's own bot, and it is not one of the
         # Factory's status lines. Every other bot, the Feedback App's above
         # all, is left out. The rule and its tests are in
-        # .sandcastle/agent-workflows/shared/steering-comments.ts.
+        # .sandcastle/agent-workflows/shared/steering-comments.ts, run from
+        # the Home repo's clone.
         if: steps.batch.outputs.numbers != '[]'
         env:
           FACTORY_BOT: ${{ steps.app.outputs.app-slug }}[bot]
         run: |
           set -euo pipefail
+          factory="$RUNNER_TEMP/factory"
           echo '{}' > /tmp/explore/kept.json
           for f in /tmp/explore/comments/*.json; do
             n="$(basename "$f" .json)"
-            npx tsx .sandcastle/agent-workflows/shared/keep-steering-comments.ts "$FACTORY_BOT" \
+            "$factory/node_modules/.bin/tsx" \
+              "$factory/.sandcastle/agent-workflows/shared/keep-steering-comments.ts" "$FACTORY_BOT" \
               < "$f" > /tmp/explore/kept-one.json
             jq --arg n "$n" --slurpfile c /tmp/explore/kept-one.json '.[$n] = $c[0]' \
               /tmp/explore/kept.json > /tmp/explore/kept-next.json
@@ -284,9 +312,13 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           OUTPUT_DIR: ${{ runner.temp }}
-        # The plan comes back as plan.json, shaped and validated by
+        # The script and its prompt come from the Home repo's clone; the
+        # working directory is the Enrolled checkout, which is what the agent
+        # explores. The plan comes back as plan.json, shaped and validated by
         # .sandcastle/agent-workflows/explore/plan-schema.ts.
-        run: npx tsx .sandcastle/agent-workflows/explore/explore.ts
+        run: |
+          "$RUNNER_TEMP/factory/node_modules/.bin/tsx" \
+            "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/explore/explore.ts"
 
       - name: Hand the plan to the apply job
         id: plan
@@ -308,7 +340,9 @@ jobs:
   # so a few seconds of `gh` don't bill a whole minute of their own.
   apply:
     needs: explore
-    if: always() && needs.explore.outputs.batch != '' && needs.explore.outputs.batch != '[]'
+    # Runs even when explore failed before it read the batch (an empty
+    # output), so the claimed Tickets are still marked blocked.
+    if: always() && inputs.tickets != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -318,20 +352,25 @@ jobs:
     permissions: {}
 
     env:
-      GH_REPO: ${{ github.repository }}
-      BATCH: ${{ needs.explore.outputs.batch }}
+      # The batch as claimed, so a failure before explore read it still marks
+      # every claimed Ticket.
+      BATCH: ${{ needs.explore.outputs.batch || inputs.tickets }}
+      # The run page lives in the Enrolled repo (ADR-0003).
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
       - name: Mint the Factory App's token
         # Issues: read/write covers every write below: comments, labels and
-        # closing duplicates. Nothing in this job runs code from the repo or
-        # from an agent; it reads the plan as data.
+        # closing duplicates, all on Tickets in the Home repo. Nothing in this
+        # job runs code from a repo or from an agent; it reads the plan as
+        # data.
         id: app
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          owner: trenddreamer
+          repositories: ${{ github.event.repository.name == 'ship-it' && 'ship-it' || format('ship-it,{0}', github.event.repository.name) }}
           permission-issues: write
 
       - name: Take the screenshots from the explore job
@@ -353,6 +392,8 @@ jobs:
           PLAN: ${{ needs.explore.outputs.plan }}
         run: |
           set -euo pipefail
+          # Every Ticket in the batch was closed since it was claimed.
+          [ "$BATCH" = "[]" ] && exit 0
           printf '%s' "$PLAN" > /tmp/plan.json
           [ -s /tmp/plan.json ] || { echo "The explore run returned no plan." >&2; exit 1; }
 
@@ -388,7 +429,7 @@ jobs:
           fi
 
       - name: Apply the plan
-        if: needs.explore.result == 'success'
+        if: needs.explore.result == 'success' && needs.explore.outputs.batch != '[]'
         # Every label below goes on with the App's token, and that matters
         # for `agent:implement`: a label applied by the built-in token does
         # not fire `issues: labeled`, so agent-implement.yml would never wake
@@ -399,9 +440,10 @@ jobs:
         # keeps them because the Factory's bot posted them.
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_REPO: ${{ env.HOME_REPO }}
         run: |
           set -euo pipefail
-          # A fresh clone of this repository does not have these labels yet.
+          # A fresh clone of the Home repo does not have these labels yet.
           gh label create "needs-a-human" --color D93F0B \
             --description "The factory stopped here" || true
           gh label create "agent:implement" --color 5319E7 \
@@ -411,7 +453,9 @@ jobs:
           shopt -s nullglob
 
           # Survivors first, so "closed as duplicate of #N" points at an issue
-          # that already has its findings on it.
+          # that already has its findings on it. Duplicates are Tickets in the
+          # same batch, so `#N` is a Ticket in the Home repo, where this
+          # comment goes.
           for n in $(jq -r '.issues | sort_by([.duplicate_of != null, .number]) | .[].number' /tmp/plan.json); do
             entry="$(jq -c --argjson n "$n" '.issues[] | select(.number == $n)' /tmp/plan.json)"
             dup="$(jq -r '.duplicate_of // empty' <<< "$entry")"
@@ -450,9 +494,10 @@ jobs:
 
       - name: Mark blocked on failure
         # A step above failed, or the explore job did.
-        if: failure() || needs.explore.result == 'failure'
+        if: failure() || needs.explore.result != 'success'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_REPO: ${{ env.HOME_REPO }}
         run: |
           # Only the issues apply did not get to. One it did is already moved on.
           for n in $(jq -r '.[]' <<< "$BATCH"); do
@@ -464,10 +509,13 @@ jobs:
           done
 
       - name: Always remove in-progress
+        # From every Ticket claimed for this run, closed ones included.
         if: always()
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_REPO: ${{ env.HOME_REPO }}
+          TICKETS: ${{ inputs.tickets }}
         run: |
-          for n in $(jq -r '.[]' <<< "$BATCH"); do
+          for n in $(jq -r '.[]' <<< "$TICKETS"); do
             gh issue edit "$n" --remove-label "agent:in-progress" || true
           done
