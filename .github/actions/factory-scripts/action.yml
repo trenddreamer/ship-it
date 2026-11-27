@@ -1,0 +1,58 @@
+name: Set up the agent scripts
+description: >-
+  Clones the agent scripts (.sandcastle) from the Home repo's `main` into
+  $RUNNER_TEMP/factory, sets up Node 22 and installs their dependencies.
+
+# Outside the workspace, so neither the agent's `git status` in the Enrolled
+# checkout nor a commit check ever sees them. actions/checkout can't write
+# outside the workspace, so this is a plain sparse clone. The token goes in a
+# one-off header, never into .git/config. The root files (package.json, the
+# lockfile) come with the cone.
+#
+# Scripts then run as "$RUNNER_TEMP/factory/node_modules/.bin/tsx"
+# "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/...", with the Enrolled
+# checkout as the working directory, or with plain `node` when they need
+# nothing installed.
+
+inputs:
+  home-repo:
+    description: The Home repo, `owner/name` (factory-tokens' `home-repo`).
+    required: true
+  token:
+    description: "A token for the Home repo with Contents: read (factory-tokens' `home-token`)."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Clone the agent scripts from the Home repo
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        HOME_REPO: ${{ inputs.home-repo }}
+      run: |
+        set -euo pipefail
+        auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+        git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+          clone --depth 1 --branch main --filter=blob:none --sparse \
+          "https://github.com/${HOME_REPO}.git" "$RUNNER_TEMP/factory"
+        git -C "$RUNNER_TEMP/factory" \
+          -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+          sparse-checkout set .sandcastle
+
+    - name: Setup Node.js 22
+      # No npm cache: setup-node only hashes lockfiles inside the workspace,
+      # and the agent scripts' one is in the clone, outside it. The Enrolled
+      # repo's own install is its Contract's business.
+      uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+
+    - name: Install the agent scripts' dependencies
+      # Sandcastle, zod and tsx, from the Home repo's lockfile. HUSKY=0: no
+      # git hooks in a clone nobody commits to.
+      shell: bash
+      working-directory: ${{ runner.temp }}/factory
+      env:
+        HUSKY: "0"
+      run: npm ci

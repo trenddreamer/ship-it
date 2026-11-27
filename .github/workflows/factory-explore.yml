@@ -43,10 +43,10 @@ name: Factory — Explore The Tickets
 #
 #   Read where the Factory App's token goes before you read anything else. It
 #   is the enforcement, not the description. The prompt asks the agent to
-#   stay read-only. In the explore job the token goes to the steps that
-#   clone the agent scripts and read the batch. They run before the agent
-#   exists, and run nothing but `git`, `gh` and `jq`. The token can read
-#   code and touch issues, and nothing else.
+#   stay read-only. In the explore job the token goes to the steps that read
+#   the batch and clone the agent scripts. They run before the agent exists,
+#   and run nothing but `git`, `gh` and `jq`. The token covers the Home repo
+#   alone, and can read its Tickets and its code, and nothing else.
 #   The job's own GITHUB_TOKEN can read the code and nothing else. So the
 #   agent has nothing to write with.
 #
@@ -97,12 +97,17 @@ name: Factory — Explore The Tickets
 #     takes the same Contract.
 #   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token.
 #   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory
-#     App (ADR-0004). Each job's first step mints a token from them with
-#     actions/create-github-app-token, and only that step sees the key. The
-#     token is new for each job, covers the Home repo and this Enrolled repo
-#     and nothing else, carries only the permissions that job needs, and is
-#     revoked when the job ends. So the findings and labels show as the
-#     Factory's bot, `<slug>[bot]`, not as the Owner.
+#     App (ADR-0004). Each job's first step, .github/actions/factory-tokens,
+#     mints a token from them, and only its mint step sees the key. The
+#     token is new for each job, covers the Home repo alone (explore writes
+#     nothing in this Enrolled repo, and checks it out with GITHUB_TOKEN),
+#     carries only the permissions that job needs, and is revoked when the
+#     job ends:
+#       explore   Issues: read (the batch) and Contents: read (to clone the
+#                 agent scripts once the Home repo is private).
+#       apply     Issues: read/write (comments, labels, closing duplicates).
+#     So the findings and labels show as the Factory's bot, `<slug>[bot]`,
+#     not as the Owner.
 #     A label applied with the built-in GITHUB_TOKEN does NOT start another
 #     workflow. The chain from explore to implement needs `agent:implement`
 #     to start one, so it goes on with the App's token, which does.
@@ -141,9 +146,8 @@ on:
 # also be a trap: GitHub keeps one pending run per group and cancels the
 # others, and a cancelled run would leave its batch `agent:in-progress`.
 
-env:
-  # Where the Tickets live, and where the agent scripts come from.
-  HOME_REPO: trenddreamer/ship-it
+# HOME_REPO, where the Tickets live and the agent scripts come from, is set
+# for each job by its first step, .github/actions/factory-tokens.
 
 jobs:
   explore:
@@ -162,47 +166,28 @@ jobs:
     steps:
       - name: Mint the Factory App's token
         # First, before anything else runs, and the only step that sees the
-        # private key. The token covers the Home repo and this Enrolled repo
-        # (once, while they are the same repo), with Issues: read/write for
-        # the Tickets and Contents: read for the agent scripts.
-        id: app
-        uses: actions/create-github-app-token@v2
+        # private key. The Home repo only, read-only: Issues for the
+        # Tickets, Contents for the agent scripts. It also sets HOME_REPO
+        # and says who the Factory's bot is.
+        id: factory
+        uses: trenddreamer/ship-it/.github/actions/factory-tokens@main
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
-          owner: trenddreamer
-          repositories: ${{ github.event.repository.name == 'ship-it' && 'ship-it' || format('ship-it,{0}', github.event.repository.name) }}
-          permission-issues: write
-          permission-contents: read
+          home-issues: read
+          home-contents: read
 
       - name: Check out the Enrolled repo
         uses: actions/checkout@v4
         with:
           persist-credentials: false
 
-      - name: Clone the agent scripts from the Home repo
-        # Into $RUNNER_TEMP/factory, outside the workspace, so the agent's
-        # `git status` in the Enrolled repo never sees them. actions/checkout
-        # can't write outside the workspace, so this is a plain clone. The
-        # token goes in a one-off header, never into .git/config.
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          set -euo pipefail
-          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
-            clone --depth 1 --branch main --filter=blob:none --sparse \
-            "https://github.com/${HOME_REPO}.git" "$RUNNER_TEMP/factory"
-          # The root files (package.json, the lockfile) come with the cone.
-          git -C "$RUNNER_TEMP/factory" \
-            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
-            sparse-checkout set .sandcastle
-
       - name: Read the batch
         id: batch
         env:
-          # The token, before the agent exists. Nothing after this gets it.
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          # The token, before the agent exists. Only this step and the
+          # scripts' clone get it.
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
           TICKETS: ${{ inputs.tickets }}
         run: |
           set -euo pipefail
@@ -226,24 +211,15 @@ jobs:
           echo "Batch: $numbers"
           echo "numbers=$numbers" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Node.js 22
-        # Before anything runs Node or npm. No npm cache: setup-node only
-        # hashes lockfiles inside the workspace, and the agent scripts' one
-        # is in the Home repo's clone, outside it. The Enrolled repo's own
-        # install is its Contract's business.
+      - name: Set up the agent scripts from the Home repo
+        # Cloned into $RUNNER_TEMP/factory, outside the workspace, so the
+        # agent's `git status` in the Enrolled repo never sees them, with
+        # Node 22 and their dependencies. See .github/actions/factory-scripts.
         if: steps.batch.outputs.numbers != '[]'
-        uses: actions/setup-node@v4
+        uses: trenddreamer/ship-it/.github/actions/factory-scripts@main
         with:
-          node-version: "22"
-
-      - name: Install the agent scripts' dependencies
-        # Sandcastle, zod and tsx, from the Home repo's lockfile. HUSKY=0: no
-        # git hooks in a clone nobody commits to.
-        if: steps.batch.outputs.numbers != '[]'
-        working-directory: ${{ runner.temp }}/factory
-        env:
-          HUSKY: "0"
-        run: npm ci
+          home-repo: ${{ steps.factory.outputs.home-repo }}
+          token: ${{ steps.factory.outputs.home-token }}
 
       - name: Install the Enrolled repo (the Contract's install)
         # Through env, never pasted into the script: the Contract is text.
@@ -252,31 +228,10 @@ jobs:
           INSTALL: ${{ inputs.install }}
         run: bash -euo pipefail -c "$INSTALL"
 
-      - name: Install Claude Code
+      - name: Install the agent's tools
+        # Claude Code, Matt Pocock's skills and agent-browser.
         if: steps.batch.outputs.numbers != '[]'
-        run: npm install -g @anthropic-ai/claude-code
-
-      - name: Install Matt Pocock's skills
-        if: steps.batch.outputs.numbers != '[]'
-        # Not pinned on purpose: CI follows the latest plugin, like a local install.
-        run: |
-          claude plugin marketplace add anthropics/claude-plugins-official
-          claude plugin install mattpocock-skills@claude-plugins-official
-
-      - name: Cache agent-browser's Chrome
-        if: steps.batch.outputs.numbers != '[]'
-        uses: actions/cache@v4
-        with:
-          path: ~/.agent-browser/browsers
-          key: agent-browser-0.27.0-${{ runner.os }}
-
-      - name: Install agent-browser
-        # The agent drives the app with it for screenshots and checks. Without
-        # it here, each run installs it mid-session.
-        if: steps.batch.outputs.numbers != '[]'
-        run: |
-          npm install -g agent-browser@0.27.0
-          agent-browser install
+        uses: trenddreamer/ship-it/.github/actions/agent-tools@main
 
       - name: Keep the comments that may steer the agent
         # A comment goes in only when its author has write access to the Home
@@ -287,7 +242,7 @@ jobs:
         # the Home repo's clone.
         if: steps.batch.outputs.numbers != '[]'
         env:
-          FACTORY_BOT: ${{ steps.app.outputs.app-slug }}[bot]
+          FACTORY_BOT: ${{ steps.factory.outputs.bot-login }}
         run: |
           set -euo pipefail
           factory="$RUNNER_TEMP/factory"
@@ -364,15 +319,13 @@ jobs:
         # Issues: read/write covers every write below: comments, labels and
         # closing duplicates, all on Tickets in the Home repo. Nothing in this
         # job runs code from a repo or from an agent; it reads the plan as
-        # data.
-        id: app
-        uses: actions/create-github-app-token@v2
+        # data. The Home repo only. It also sets HOME_REPO.
+        id: factory
+        uses: trenddreamer/ship-it/.github/actions/factory-tokens@main
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
-          owner: trenddreamer
-          repositories: ${{ github.event.repository.name == 'ship-it' && 'ship-it' || format('ship-it,{0}', github.event.repository.name) }}
-          permission-issues: write
+          home-issues: write
 
       - name: Take the screenshots from the explore job
         if: needs.explore.result == 'success'
@@ -441,7 +394,7 @@ jobs:
         # They are the one thing the implementer most needs to read, and it
         # keeps them because the Factory's bot posted them.
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
           GH_REPO: ${{ env.HOME_REPO }}
         run: |
           set -euo pipefail
@@ -498,7 +451,7 @@ jobs:
         # A step above failed, or the explore job did.
         if: failure() || needs.explore.result != 'success'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
           GH_REPO: ${{ env.HOME_REPO }}
         run: |
           # Only the issues apply did not get to. One it did is already moved on.
@@ -514,7 +467,7 @@ jobs:
         # From every Ticket claimed for this run, closed ones included.
         if: always()
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
           GH_REPO: ${{ env.HOME_REPO }}
           TICKETS: ${{ inputs.tickets }}
         run: |

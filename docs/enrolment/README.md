@@ -19,7 +19,7 @@ Knowing the path makes each step's purpose plain:
 The Home repo needs these whatever repos are enrolled. They are already done for `ship-it`; check them if anything is rebuilt.
 
 - **The Factory App** exists and is installed on the Home repo, and the Home repo holds its secrets `FACTORY_APP_ID` and `FACTORY_APP_PRIVATE_KEY`. The routing job and the spec queue use them. `scripts/set-factory-secrets.sh trenddreamer/ship-it` sets them.
-- **Access to the shared workflows.** While the Home repo is private, other repos can only call its workflows if it allows them to. In the Home repo: **Settings → Actions → General → Access**, choose **"Accessible from repositories owned by the 'trenddreamer' user"**, and save. Without it, every caller workflow fails at once, before any job starts. This only works for private repos, so every Enrolled repo must be private too.
+- **Access to the shared workflows.** While the Home repo is private, other repos can only call its workflows, and the actions they use, if it allows them to. In the Home repo: **Settings → Actions → General → Access**, choose **"Accessible from repositories owned by the 'trenddreamer' user"**, and save. Without it, every caller workflow fails at once, before any job starts. This only works for private repos, so every Enrolled repo must be private too.
 - **The `agent:*` labels** exist in the Home repo: `agent:explore`, `agent:implement`, `agent:review` and `agent:implement-spec`. The Factory creates the rest (`agent:in-progress`, `agent:blocked`, `agent:queued`, `agent:built`, `spec:<n>`) when it first needs them.
 
 ## The steps
@@ -51,9 +51,9 @@ Do them in order. The Factory can't reach the repo until steps 1 to 3 are all do
 
 - On GitHub: your avatar → **Settings → Applications → Installed GitHub Apps**, then **Configure** next to the Factory App.
 - Under **Repository access**, keep **Only select repositories**, add `owner/name`, and **Save**. Don't switch to "All repositories".
-- In the Enrolled repo, **Settings → Actions → General → Actions permissions** must allow reusable workflows from `trenddreamer/ship-it`. The default, "Allow all actions and reusable workflows", does. If the repo limits which actions it allows, add `trenddreamer/ship-it/.github/workflows/*`.
+- In the Enrolled repo, **Settings → Actions → General → Actions permissions** must allow reusable workflows and actions from `trenddreamer/ship-it`. The default, "Allow all actions and reusable workflows", does. If the repo limits which actions it allows, add `trenddreamer/ship-it/.github/workflows/*` and `trenddreamer/ship-it/.github/actions/*`.
 
-The App's tokens name the owner `trenddreamer`, so an Enrolled repo must belong to the `trenddreamer` account.
+Each token a run in the Enrolled repo mints covers one repo, because a token's permissions apply to every repo it covers: the Home repo's (the Tickets, the agent scripts, and dispatching the Home repo's own workflows), and, for the runs that push, the Enrolled repo's (pushing and the pull request, never Actions). So a run in an Enrolled repo other than the Home repo itself can't write the Home repo's code, and can't start the Enrolled repo's caller workflow around the Registry. The Home repo shares its workflows only with repos owned by `trenddreamer` (the Access step under "Before the first repo"), so an Enrolled repo must belong to the `trenddreamer` account.
 
 ### 3. Add the caller workflow with its Contract, and set its secrets
 
