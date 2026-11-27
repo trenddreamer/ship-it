@@ -34,7 +34,25 @@ name: Agent — Route The Tickets
 #   `ticket=<n>`. Implement never starts any other way: no event in an
 #   Enrolled repo starts it.
 #
-#   #47 and #48 add review and the spec queue here the same way.
+# REVIEW
+#   Two ways in, both here in the Home repo, because no event in an Enrolled
+#   repo reaches it (ADR-0002):
+#
+#     chained   implement, once it has opened a pull request, dispatches this
+#               workflow with `task=review`, the Ticket and the pull request.
+#               So does the spec queue's build. No label on the pull request
+#               is involved.
+#     by hand   the Owner puts `agent:review` on the Ticket, to have its pull
+#               request reviewed (again). The pull request isn't named then:
+#               the review run finds the Ticket's newest open one.
+#
+#   Either way, the same jobs run on that one Ticket, if it is still open
+#   (and, by hand, still labelled): route it, claim it (`agent:review` off,
+#   `agent:in-progress` on), and start factory.yml in its Enrolled repo with
+#   `task=review`, `ticket=<n>` and `pr=<n>` if it was given. The review runs
+#   in the Enrolled repo, factory-review.yml.
+#
+#   #48 adds the spec queue here the same way.
 #
 # TOKENS
 #   Two Factory App tokens (ADR-0004), each minted in its job's first step,
@@ -54,20 +72,40 @@ name: Agent — Route The Tickets
 #   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory App.
 #   The Factory App installed on every repo in the Registry, and each one's
 #     caller workflow, factory.yml, on its default branch.
-#   The `agent:explore` and `agent:implement` labels. A fresh clone of this
+#   The `agent:explore`, `agent:implement` and `agent:review` labels. A fresh clone of this
 #     repository does not have them, and no workflow can create the label
 #     that starts it. Create them once:
 #       gh label create "agent:explore" --color 5319E7 \
 #         --description "The factory explores this ticket"
 #       gh label create "agent:implement" --color 5319E7 \
 #         --description "Hand this issue to the implementer agent"
+#       gh label create "agent:review" --color 5319E7 \
+#         --description "Ask the review workflow to read this Ticket's pull request"
 
 on:
   issues:
     types: [labeled]
+  # How a Factory run chains review: implement's token has Actions: write to
+  # dispatch this, and nothing in the Enrolled repo has to start it. Anyone
+  # with write access to the Home repo can dispatch it too.
+  workflow_dispatch:
+    inputs:
+      task:
+        description: The Factory's task.
+        type: choice
+        options: [review]
+        required: true
+      ticket:
+        description: The Ticket's number.
+        type: string
+        required: true
+      pr:
+        description: The pull request's number in the Ticket's Enrolled repo. Empty to find it from the Ticket.
+        type: string
+        required: false
 
-# One explore routing run at a time, and one implement routing run per
-# Ticket, never cancelled. A label that lands mid-run queues one more run
+# One explore routing run at a time, and one implement and one review routing
+# run per Ticket, never cancelled. A label that lands mid-run queues one more run
 # behind this one, which lists the Tickets again when it starts. The Tickets
 # this run took are `agent:in-progress` by then, so nothing is taken twice
 # and nothing is lost. GitHub keeps one queued run per group, and bumps an
@@ -82,6 +120,8 @@ concurrency:
   group: >-
     ${{ github.event.label.name == 'agent:explore' && 'agent-route-explore'
     || github.event.label.name == 'agent:implement' && format('agent-route-implement-{0}', github.event.issue.number)
+    || github.event.label.name == 'agent:review' && format('agent-route-review-{0}', github.event.issue.number)
+    || inputs.task == 'review' && format('agent-route-review-{0}', inputs.ticket)
     || format('ignore-{0}', github.run_id) }}
   cancel-in-progress: false
 
@@ -89,7 +129,11 @@ permissions: {}
 
 jobs:
   route:
-    if: github.event.label.name == 'agent:explore' || github.event.label.name == 'agent:implement'
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.label.name == 'agent:explore'
+      || github.event.label.name == 'agent:implement'
+      || github.event.label.name == 'agent:review'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -101,8 +145,11 @@ jobs:
 
     env:
       GH_REPO: ${{ github.repository }}
-      TRIGGER: ${{ github.event.label.name }}
-      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      # The label that started the run, or, when dispatched, the label that
+      # would have: a refused Ticket loses it, and re-adding it retries.
+      TRIGGER: ${{ github.event.label.name || format('agent:{0}', inputs.task) }}
+      ISSUE_NUMBER: ${{ github.event.issue.number || inputs.ticket }}
+      DISPATCHED: ${{ github.event_name == 'workflow_dispatch' }}
 
     steps:
       - name: Mint the Factory App's token
@@ -137,13 +184,24 @@ jobs:
             sleep 5
             numbers="$(gh issue list --state open --label "agent:explore" --limit 100 \
               --json number --jq '[.[].number] | sort')"
+          elif [ "$DISPATCHED" = "true" ]; then
+            # A chained review: the Ticket that was named, if it is still
+            # open. A dispatched Ticket carries no trigger label.
+            if ! [[ "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+              echo "::error::The ticket input must be a number."
+              exit 1
+            fi
+            numbers="$(gh issue view "$ISSUE_NUMBER" --json number,state --jq \
+              'if .state == "OPEN" then [.number] else [] end')"
           else
-            # Implement takes the Ticket that was labelled, if it is still
-            # open and still has the label: a run queued behind another may
-            # find it closed, or the label taken off again.
-            numbers="$(gh issue view "$ISSUE_NUMBER" --json number,state,labels --jq \
-              'if .state == "OPEN" and any(.labels[]; .name == "agent:implement")
-               then [.number] else [] end')"
+            # Implement, or review by hand, takes the Ticket that was
+            # labelled, if it is still open and still has the label: a run
+            # queued behind another may find it closed, or the label taken
+            # off again.
+            numbers="$(gh issue view "$ISSUE_NUMBER" --json number,state,labels \
+              | jq -c --arg trigger "$TRIGGER" \
+                'if .state == "OPEN" and any(.labels[]; .name == $trigger)
+                 then [.number] else [] end')"
           fi
           echo "numbers=$numbers" >> "$GITHUB_OUTPUT"
 
@@ -155,11 +213,11 @@ jobs:
         uses: ./.github/actions/route-tickets
         with:
           tickets: ${{ steps.open.outputs.numbers }}
-          trigger: ${{ github.event.label.name }}
+          trigger: ${{ github.event.label.name || format('agent:{0}', inputs.task) }}
           token: ${{ steps.app.outputs.token }}
 
       - name: Batch the Tickets by Enrolled repo
-        # Implement's one Ticket makes one batch of one.
+        # Implement's and review's one Ticket makes one batch of one.
         id: batch
         if: steps.route.outputs.routed != '' && steps.route.outputs.routed != '[]'
         # Plain `node` runs the .ts file: the route action's setup-node put
@@ -191,9 +249,16 @@ jobs:
       GH_REPO: ${{ github.repository }}
       ENROLLED_REPO: ${{ matrix.batch.repo }}
       TICKETS: ${{ toJSON(matrix.batch.tickets) }}
-      TRIGGER: ${{ github.event.label.name }}
-      # `agent:explore` → explore, `agent:implement` → implement.
-      TASK: ${{ github.event.label.name == 'agent:explore' && 'explore' || 'implement' }}
+      TRIGGER: ${{ github.event.label.name || format('agent:{0}', inputs.task) }}
+      # Dispatched: the task it names. Else `agent:explore` → explore,
+      # `agent:implement` → implement, `agent:review` → review.
+      TASK: >-
+        ${{ inputs.task
+        || github.event.label.name == 'agent:explore' && 'explore'
+        || github.event.label.name == 'agent:implement' && 'implement'
+        || 'review' }}
+      # Review only, and only when chained: the pull request to review.
+      PR: ${{ inputs.pr }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
@@ -240,6 +305,18 @@ jobs:
             # A batch of one: implement builds a Ticket at a time.
             implement) gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
                          -f task=implement -f ticket="$(jq -r '.[0]' <<< "$TICKETS")" ;;
+            # With no pull request named, review finds the Ticket's own.
+            review)
+              pr=()
+              if [ -n "$PR" ]; then
+                if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
+                  echo "::error::The pr input must be a number."
+                  exit 1
+                fi
+                pr=(-f pr="$PR")
+              fi
+              gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
+                -f task=review -f ticket="$(jq -r '.[0]' <<< "$TICKETS")" "${pr[@]}" ;;
           esac
           echo "The $TASK run for $TICKETS started in $ENROLLED_REPO."
 
