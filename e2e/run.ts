@@ -38,8 +38,10 @@ const env: NodeJS.ProcessEnv = {
   DATABASE_PATH: join(databaseDir, "marketplace.db"),
   // The daily job's secret, for the server and for runDueDeliveriesJob (e2e/helpers.ts).
   CRON_SECRET: "journey-cron-secret",
-  // Feedback is only logged: a token in the developer's shell must never open real issues.
-  FEEDBACK_GITHUB_TOKEN: "",
+  // Feedback is only logged: App credentials in the developer's shell must never open real issues.
+  FEEDBACK_APP_ID: "",
+  FEEDBACK_APP_PRIVATE_KEY: "",
+  FEEDBACK_APP_INSTALLATION_ID: "",
 };
 // Always a local file: never let the journey touch Turso.
 delete env.TURSO_DATABASE_URL;

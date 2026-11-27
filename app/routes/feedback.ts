@@ -8,17 +8,13 @@ import { db } from "~/db/client.server";
 import {
   currentCommit,
   feedbackFormSchema,
+  feedbackTracker,
   giveFeedback,
-  githubTracker,
-  loggingTracker,
 } from "~/modules/feedback/server";
 import type { Route } from "./+types/feedback";
 
-// A real GitHub issue only when a token is configured: never from the checks or the journey.
-const { githubToken, githubRepo } = config.feedback;
-const tracker = githubToken
-  ? githubTracker({ token: githubToken, repo: githubRepo })
-  : loggingTracker;
+// A real GitHub issue only when the Feedback App is configured: never from the checks or the journey.
+const tracker = feedbackTracker(config.feedback);
 
 export async function action({ request }: Route.ActionArgs) {
   const account = await requireAccount(request, "customer", "vendor", "admin");
