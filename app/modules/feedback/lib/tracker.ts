@@ -11,7 +11,7 @@ export type Tracker = {
 
 /**
  * A Tracker that opens nothing: it writes what would have been sent to the
- * server console and returns no URL. For when no GitHub token is configured.
+ * server console and returns no URL. For when the Feedback App isn't configured.
  */
 export const loggingTracker: Tracker = {
   async openIssue(issue) {
