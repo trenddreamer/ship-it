@@ -48,13 +48,20 @@ name: Agent — Review A Pull Request
 #
 # WHAT IT NEEDS
 #   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token.
-#   secrets.FACTORY_PAT — the factory's one token. Only the steps that call
-#     GitHub get it; the agent's step does not. It pushes the review's
-#     commits and posts its verdict and inline comments, so it needs
-#     Contents and Pull requests: write. Keeping it out of the agent's
-#     environment is tidiness, not a wall: the agent shares the machine with
-#     the steps that push and post. The real defence is who can reach the
-#     agent — same-repo PRs only, and a label only a collaborator can apply.
+#   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory
+#     App (ADR-0004). The job's first step mints a token from them with
+#     actions/create-github-app-token, and only that step sees the key. The
+#     token is new for this run, covers this repository only, and is revoked
+#     when the job ends. It pushes the review's commits and posts its verdict
+#     and inline comments, so it carries Contents, Pull requests and Issues:
+#     read/write (Issues for the labels and the ticket), and nothing else. Not
+#     Actions: a review run cannot start other workflows. Not Workflows: a fix
+#     that touches `.github/workflows/` is refused at the push.
+#     Only the steps that call GitHub get the token; the agent's step does
+#     not. Keeping it out of the agent's environment is tidiness, not a wall:
+#     the agent shares the machine with the steps that push and post. The
+#     real defence is who can reach the agent — same-repo PRs only, and a
+#     label only a collaborator, or the Factory itself, can apply.
 #   secrets.GITHUB_TOKEN — supplied by Actions, used only for the checkout.
 #   The `agent:review` label. A fresh clone of this repository does not have
 #     it, and no workflow can create the label that starts it. Create it once:
@@ -63,8 +70,8 @@ name: Agent — Review A Pull Request
 #
 # A CAUTION THAT COMES WITH IT
 #   `pull_request` (not `pull_request_target`), so a PR from a fork runs with
-#   a read-only token and no secrets — no FACTORY_PAT either, so the run
-#   fails at its first `gh` call. That means this workflow will not review a
+#   a read-only token and no secrets — no Factory App key either, so the run
+#   fails at its first step, minting the token. That means this workflow will not review a
 #   fork PR. That is the correct trade: reviewing a stranger's code
 #   with a writable token is how a factory gets robbed.
 
@@ -74,7 +81,7 @@ on:
 
 # A ceiling on the GITHUB_TOKEN, which only checks the code out. Reading the
 # PR and the ticket, pushing the fixes, posting the verdict and the inline
-# comments, and marking the PR ready all go through FACTORY_PAT.
+# comments, and marking the PR ready all go through the Factory App's token.
 permissions:
   contents: read # the checkout
 
@@ -103,11 +110,37 @@ jobs:
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
+      - name: Mint the Factory App's token
+        # First, and the only step that sees the private key. This
+        # repository only (`owner` and `repositories` unset), and only what a
+        # review uses. No `permission-actions`: a review never dispatches.
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
+      - name: Who the Factory is
+        # The App's bot account, so the review's commits are linked to it:
+        # `<slug>[bot]`, and the noreply address with the bot's user id.
+        id: bot
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          LOGIN: ${{ steps.app.outputs.app-slug }}[bot]
+        run: |
+          set -euo pipefail
+          id="$(gh api "/users/${LOGIN}" --jq .id)"
+          echo "login=${LOGIN}" >> "$GITHUB_OUTPUT"
+          echo "email=${id}+${LOGIN}@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+
       - name: Transition labels
         # The trigger comes off, so putting it back on is how you retry.
         # `agent:in-progress` goes on until the run ends, however it ends.
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           # A fresh clone of this repository does not have these labels yet.
           gh label create "agent:in-progress" --color FBCA04 \
@@ -129,7 +162,7 @@ jobs:
 
       - name: Collect the three primary sources
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
 
@@ -193,10 +226,13 @@ jobs:
           npm run db:seed
 
       - name: Open the branch
+        env:
+          GIT_NAME: ${{ steps.bot.outputs.login }}
+          GIT_EMAIL: ${{ steps.bot.outputs.email }}
         run: |
           set -euo pipefail
-          git config user.name "agent-factory[bot]"
-          git config user.email "agent-factory[bot]@users.noreply.github.com"
+          git config user.name "$GIT_NAME"
+          git config user.email "$GIT_EMAIL"
           git checkout -B "$BRANCH"
           # `npm ci` ran husky, which points git at .husky/_. If it did not,
           # the agent's commits would skip the hook without anyone noticing.
@@ -214,7 +250,7 @@ jobs:
       - name: Push the review's fixes
         id: push
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           if [ -n "$(git status --porcelain)" ]; then
@@ -249,7 +285,7 @@ jobs:
         id: fallback
         if: steps.push.outputs.fallback == 'true'
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           {
@@ -271,7 +307,7 @@ jobs:
       - name: Post the verdict on the pull request
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           FALLBACK: ${{ steps.push.outputs.fallback }}
           FALLBACK_URL: ${{ steps.fallback.outputs.url }}
         run: |
@@ -306,7 +342,7 @@ jobs:
         # the push was rejected. review.ts already dropped every comment
         # outside the diff, because GitHub rejects the whole review for one.
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           TARGET: ${{ steps.fallback.outputs.number || github.event.pull_request.number }}
         run: |
           set -euo pipefail
@@ -326,7 +362,7 @@ jobs:
         # matter. This step runs nothing the agent or the PR wrote: it reads
         # the verdict as text and calls `gh`.
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           if grep -q '## Standards:' /tmp/review-verdict.md; then
@@ -340,11 +376,11 @@ jobs:
         # a person has to choose between the two PRs.
         if: failure() || steps.push.outputs.fallback == 'true'
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: gh pr edit "$PR_NUMBER" --add-label "agent:blocked" || true
 
       - name: Always remove in-progress
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: gh pr edit "$PR_NUMBER" --remove-label "agent:in-progress" || true

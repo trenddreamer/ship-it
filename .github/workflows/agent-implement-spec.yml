@@ -74,28 +74,46 @@ name: Agent — Implement A Spec
 #   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token. Both agents are
 #                               Sandcastle scripts in
 #                               .sandcastle/agent-workflows/implement-spec/.
-#   secrets.FACTORY_PAT       — a fine-grained PAT on this repository with
-#                               Issues, Pull requests, Contents, Workflows and
-#                               Actions, all read/write. Every step that talks
-#                               to GitHub uses it, and only those steps: no
-#                               agent step, and no step that runs code an
-#                               agent wrote, has it in its environment.
+#   secrets.FACTORY_APP_ID,
+#   secrets.FACTORY_APP_PRIVATE_KEY
+#                             — the Factory App (ADR-0004). Each job's first
+#                               step mints a token from them with
+#                               actions/create-github-app-token, and only that
+#                               step sees the key. A token lives for one job:
+#                               it is revoked when the job ends, so each job
+#                               mints its own. Each covers this repository
+#                               only, with only what that job does:
 #
-#                               That keeps it out of the agent's way, not out
-#                               of its reach: the agent shares a machine with
-#                               the later PAT steps, unsandboxed. The real
-#                               defence is who can reach the agent at all —
-#                               collaborator-only issues and comments, and
-#                               labels only a collaborator can apply.
+#                                 survey     Issues: read
+#                                 decompose  Issues: read/write, Actions:
+#                                            read/write (the chain)
+#                                 implement  Contents, Pull requests, Issues
+#                                            and Actions: read/write
 #
-#                               Why one token for everything? Simplicity, and
-#                               because two hops need it anyway. The draft PR:
-#                               by default the built-in GITHUB_TOKEN may not
-#                               open one. The `agent:review` label: one applied
-#                               with the built-in token lands, and starts no
-#                               workflow, so the reviewer would never wake.
-#                               Once a PAT has to be in the room, every other
-#                               call may as well be the same PAT.
+#                               None has Workflows: write, so a push that
+#                               changes `.github/workflows/` is refused.
+#
+#                               Every step that talks to GitHub uses the
+#                               token, and only those steps: no agent step,
+#                               and no step that runs code an agent wrote, has
+#                               it in its environment. That keeps it out of
+#                               the agent's way, not out of its reach: the
+#                               agent shares a machine with the later token
+#                               steps, unsandboxed. The real defence is who can
+#                               reach the agent at all — collaborator-only
+#                               issues, comments from collaborators and the
+#                               Factory's own bot, and labels only a
+#                               collaborator or the Factory can apply.
+#
+#                               Why not the built-in GITHUB_TOKEN? Two hops
+#                               need another token. The draft PR: by default
+#                               the built-in GITHUB_TOKEN may not open one. The
+#                               `agent:review` label: one applied with the
+#                               built-in token lands, and starts no workflow,
+#                               so the reviewer would never wake. One the App
+#                               applies does. And the App's token makes the
+#                               Factory's commits, PRs and comments its bot's,
+#                               `<slug>[bot]`, so the Owner can approve them.
 #   secrets.GITHUB_TOKEN      — supplied by Actions, and used for the checkout
 #                               and nothing else. `permissions:` shrinks it to
 #                               match.
@@ -136,7 +154,8 @@ on:
         type: string
 
 # A ceiling on the GITHUB_TOKEN, which now only checks the code out. Pushing,
-# labelling, commenting and dispatching all go through FACTORY_PAT.
+# labelling, commenting and dispatching all go through the Factory App's
+# token, minted afresh in each job.
 permissions:
   contents: read # the checkout
 
@@ -147,7 +166,7 @@ permissions:
 #
 # Only the runs that can do something join that group. Every label on every
 # issue starts this workflow, and the factory's own labels do too now that
-# FACTORY_PAT applies them (`agent:in-progress` when it claims a ticket,
+# the Factory App applies them (`agent:in-progress` when it claims a ticket,
 # `agent:blocked` when it parks one). A group holds one running run and one
 # waiting run, and a newcomer replaces the one waiting — so those label runs,
 # left in the group, could bump the chain's next run out of the queue. Every
@@ -178,16 +197,26 @@ jobs:
       remaining: ${{ steps.survey.outputs.remaining }}
 
     env:
-      # On the job, which is fine here: this job runs `gh` and `jq` and
-      # nothing else — no checkout, no agent.
-      GH_TOKEN: ${{ secrets.FACTORY_PAT }}
       GH_REPO: ${{ github.repository }}
       # Whichever of the three triggers fired, the spec number ends up here.
       REQUESTED_SPEC: ${{ github.event.issue.number || inputs.spec_issue }}
 
     steps:
+      - name: Mint the Factory App's token
+        # Survey only reads the queue, so its token can only read issues.
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-issues: read
+
       - name: Find the spec and the frontier ticket
         id: survey
+        env:
+          # This job runs `gh` and `jq` and nothing else — no checkout, no
+          # agent.
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
 
@@ -307,6 +336,17 @@ jobs:
       SPEC: ${{ needs.survey.outputs.spec }}
 
     steps:
+      - name: Mint the Factory App's token
+        # First, and the only step that sees the private key. Issues to read
+        # the spec and write the queue; Actions to start the next run.
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-actions: write
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -314,7 +354,7 @@ jobs:
 
       - name: Read the spec
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           gh issue view "$SPEC" --json number,title,body \
@@ -362,7 +402,7 @@ jobs:
 
       - name: Write the queue as issues
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           cp "$RUNNER_TEMP/queue.json" /tmp/queue.json
@@ -422,14 +462,13 @@ jobs:
       - name: Start the next ticket
         if: always()
         env:
-          # FACTORY_PAT, like every other call in this file — for simplicity,
-          # not because this hop needs it. `workflow_dispatch` is the one
-          # event the built-in GITHUB_TOKEN *is* allowed to start (with
-          # `actions: write`); it is labels and pushes it cannot. One token
-          # for the whole factory is easier to reason about than two, and
-          # the draft PR and the `agent:review` label above need the PAT
-          # anyway. The cost: the PAT needs Actions: write for this line.
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          # The App's token, like every other call in this file — so the run
+          # shows as the Factory's, not because this hop needs it.
+          # `workflow_dispatch` is the one event the built-in GITHUB_TOKEN
+          # *is* allowed to start (with `actions: write`); it is labels and
+          # pushes it cannot. The cost: this job's token carries Actions:
+          # write for this line.
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
@@ -460,6 +499,33 @@ jobs:
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
+      - name: Mint the Factory App's token
+        # First, and the only step that sees the private key. What building
+        # a ticket uses (a branch, a pull request, the ticket's labels and
+        # comments), plus Actions to start the next run.
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+          permission-actions: write
+
+      - name: Who the Factory is
+        # The App's bot account, so its commits are linked to it on GitHub:
+        # `<slug>[bot]`, and the noreply address with the bot's user id.
+        id: bot
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          LOGIN: ${{ steps.app.outputs.app-slug }}[bot]
+        run: |
+          set -euo pipefail
+          id="$(gh api "/users/${LOGIN}" --jq .id)"
+          echo "login=${LOGIN}" >> "$GITHUB_OUTPUT"
+          echo "email=${id}+${LOGIN}@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -506,7 +572,7 @@ jobs:
         # Moving the label first is what stops a cron tick that lands during a
         # long build from picking the same ticket up again.
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           gh label create "agent:in-progress" --color FBCA04 \
@@ -518,36 +584,52 @@ jobs:
 
       - name: Read the ticket and its spec
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           # Same filter as agent-implement.yml: a comment reaches the agent
-          # only when its author has write access to this repo. The factory's
-          # own comments pass that (FACTORY_PAT posts them as you), so its
-          # status lines -- "Building", the failure that parked a ticket --
-          # carry a hidden `<!-- factory:status -->` and are dropped here.
-          gh issue view "$TICKET" --json number,title,body,comments \
-            | jq '.comments |= map(select(
-                (.authorAssociation | IN("OWNER", "MEMBER", "COLLABORATOR"))
-                and (.body | contains("<!-- factory:status -->") | not)))' \
-            > /tmp/ticket.json
-          jq -r '
-            "# " + .title + "\n\n" + .body
-            + (if (.comments | length) > 0
-               then "\n\n## Comments\n"
-                 + ([.comments[] | "\n### " + .author.login + " (" + .createdAt + ")\n\n" + .body + "\n"] | join(""))
-               else "" end)
-          ' /tmp/ticket.json > /tmp/ticket.md
+          # only when its author has write access to this repo, or it is the
+          # Factory's own bot (GitHub gives the bot CONTRIBUTOR or NONE). Any
+          # other bot, the Feedback App's above all, never gets in. The
+          # Factory's status lines -- "Building", the failure that parked a
+          # ticket -- carry a hidden `<!-- factory:status -->` and are dropped.
+          # This step only fetches; the next filters, without the token.
+          gh issue view "$TICKET" --json number,title,body > /tmp/ticket.json
+          # REST, not `gh issue view --json comments`: only REST gives a bot's
+          # full `<slug>[bot]` login and says it is a bot.
+          gh api --paginate "repos/$GH_REPO/issues/$TICKET/comments" --jq '.[]' \
+            | jq -s . > /tmp/all-comments.json
           gh issue view "$SPEC" --json number,title,body \
             --jq '"# Spec: " + .title + "\n\n" + .body' > /tmp/spec.md
+
+      - name: Keep the comments that may steer the agent
+        # The rule and its tests:
+        # .sandcastle/agent-workflows/shared/steering-comments.ts.
+        env:
+          FACTORY_BOT: ${{ steps.bot.outputs.login }}
+        run: |
+          set -euo pipefail
+          npx tsx .sandcastle/agent-workflows/shared/keep-steering-comments.ts "$FACTORY_BOT" \
+            < /tmp/all-comments.json > /tmp/comments.json
+          rm /tmp/all-comments.json
+          jq -r --slurpfile comments /tmp/comments.json '
+            "# " + .title + "\n\n" + .body
+            + (if ($comments[0] | length) > 0
+               then "\n\n## Comments\n"
+                 + ([$comments[0][] | "\n### " + .author + " (" + .createdAt + ")\n\n" + .body + "\n"] | join(""))
+               else "" end)
+          ' /tmp/ticket.json > /tmp/ticket.md
           cat /tmp/ticket.md
 
       - name: Open the branch
         id: branch
+        env:
+          GIT_NAME: ${{ steps.bot.outputs.login }}
+          GIT_EMAIL: ${{ steps.bot.outputs.email }}
         run: |
           set -euo pipefail
-          git config user.name "agent-factory[bot]"
-          git config user.email "agent-factory[bot]@users.noreply.github.com"
+          git config user.name "$GIT_NAME"
+          git config user.email "$GIT_EMAIL"
           git checkout -b "$BRANCH"
           echo "base=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           # Same as agent-implement.yml: the agent commits through the repo's
@@ -584,7 +666,7 @@ jobs:
 
       - name: Push
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           # The token reaches git for this one push, with hooks off, so
@@ -597,11 +679,11 @@ jobs:
       - name: Open the draft PR
         id: ship
         env:
-          # One of the two hops that made FACTORY_PAT necessary: by default
+          # One of the two hops the built-in token cannot make: by default
           # the built-in GITHUB_TOKEN is not allowed to open a pull request,
           # so `gh pr create` with it fails. This step runs nothing the agent
           # wrote: it reads the agent's summary as text and hands it to `gh`.
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           title=$(gh issue view "$TICKET" --json title --jq .title)
@@ -634,13 +716,13 @@ jobs:
       - name: Hand the pull request to the reviewer
         if: steps.ship.outputs.shipped == 'true'
         env:
-          # The other hop that made FACTORY_PAT necessary, and the line the
+          # The other hop the built-in token cannot make, and the line the
           # whole chain ends on. agent-review.yml triggers on `pull_request: [labeled]`, and
           # a label applied with the built-in token does not fire a workflow —
           # GitHub suppresses that so a workflow cannot trigger itself. With
           # GITHUB_TOKEN the label lands, the run goes green, and the reviewer
           # never wakes: the last link in the chain breaks and says nothing.
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -655,7 +737,7 @@ jobs:
       - name: Close the ticket and move the queue on
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           PR_URL: ${{ steps.ship.outputs.url }}
         run: |
           set -euo pipefail
@@ -686,14 +768,13 @@ jobs:
       - name: Start the next ticket
         if: always()
         env:
-          # FACTORY_PAT, like every other call in this file — for simplicity,
-          # not because this hop needs it. `workflow_dispatch` is the one
-          # event the built-in GITHUB_TOKEN *is* allowed to start (with
-          # `actions: write`); it is labels and pushes it cannot. One token
-          # for the whole factory is easier to reason about than two, and
-          # the draft PR and the `agent:review` label above need the PAT
-          # anyway. The cost: the PAT needs Actions: write for this line.
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          # The App's token, like every other call in this file — so the run
+          # shows as the Factory's, not because this hop needs it.
+          # `workflow_dispatch` is the one event the built-in GITHUB_TOKEN
+          # *is* allowed to start (with `actions: write`); it is labels and
+          # pushes it cannot. The cost: this job's token carries Actions:
+          # write for this line.
+          GH_TOKEN: ${{ steps.app.outputs.token }}
           REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
