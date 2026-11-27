@@ -6,10 +6,11 @@ open any code. Build the ticket, and only the ticket.
 
 - Ship tests with the code. End with more passing tests than you started
   with, and none failing.
-- Commit with `git commit` on the current branch. When the pre-commit hook
-  rejects a commit, fix the work and commit again. The hook stays as it is:
-  no `--no-verify`, no edits to `.husky/`, `scripts/pre-commit.sh` or
-  `core.hooksPath`.
+- The work is done when this repository's checks pass: `{{CHECK}}`. The
+  workflow runs them after you finish, and opens no pull request if they fail.
+- Commit with `git commit` on the current branch. When a pre-commit hook
+  rejects a commit, fix the work and commit again. The hooks stay as they
+  are: no `--no-verify`, no edits to the hook scripts or `core.hooksPath`.
 - Finish with at least one commit and a clean working tree. The workflow
   pushes and opens the pull request.
 - Leave `.github/` untouched.

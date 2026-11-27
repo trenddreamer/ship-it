@@ -173,10 +173,12 @@ jobs:
           # 3. The spec. Whatever issue this PR closes — found in the PR body,
           #    which is the one thing here we do read from the PR. If there is
           #    no `Closes #n`, the Spec axis reports "no spec available"
-          #    rather than inventing one.
+          #    rather than inventing one. The implementer writes the
+          #    cross-repo form, `Closes trenddreamer/ship-it#n`; while the
+          #    Marketplace is in ship-it, that issue is in this repo too.
           gh pr view "$PR_NUMBER" --json body --jq .body > /tmp/pr-body.md
-          issue=$(grep -oiE '(closes|fixes|resolves) #[0-9]+' /tmp/pr-body.md \
-            | head -n1 | grep -oE '[0-9]+' || true)
+          issue=$(grep -oiE '(closes|fixes|resolves) ([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?#[0-9]+' /tmp/pr-body.md \
+            | head -n1 | grep -oE '#[0-9]+' | tr -d '#' || true)
           if [ -n "$issue" ]; then
             gh issue view "$issue" --json number,title,body \
               --jq '"# Ticket #" + (.number|tostring) + ": " + .title + "\n\n" + .body' \

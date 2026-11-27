@@ -15,6 +15,9 @@ name: Factory
 #   `workflow_dispatch`: a task and the Tickets it is for. Nothing in this
 #   repo starts the Factory.
 #
+#     explore     `tickets`, a batch of Tickets routed to this repo.
+#     implement   `ticket`, the one Ticket to build.
+#
 # THE CONTRACT
 #   install   how to install the repo, from a fresh checkout.
 #   seed      how to set up and seed its database.
@@ -31,12 +34,16 @@ on:
       task:
         description: The Factory's task.
         type: choice
-        options: [explore]
+        options: [explore, implement]
         required: true
       tickets:
-        description: The Tickets in the Home repo, as a JSON array, e.g. `[12, 13]`.
+        description: For explore, the Tickets in the Home repo, as a JSON array, e.g. `[12, 13]`.
         type: string
-        required: true
+        required: false
+      ticket:
+        description: For implement, the Ticket's number in the Home repo.
+        type: string
+        required: false
 
 # The built-in token gets nothing unless a job asks for it.
 permissions: {}
@@ -49,6 +56,21 @@ jobs:
       contents: read
     with:
       tickets: ${{ inputs.tickets }}
+      install: npm ci
+      seed: npm run db:migrate && npm run db:seed
+      check: npm run check
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+
+  implement:
+    if: inputs.task == 'implement'
+    uses: trenddreamer/ship-it/.github/workflows/factory-implement.yml@main
+    permissions:
+      contents: read
+    with:
+      ticket: ${{ inputs.ticket }}
       install: npm ci
       seed: npm run db:migrate && npm run db:seed
       check: npm run check

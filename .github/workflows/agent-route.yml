@@ -25,8 +25,16 @@ name: Agent — Route The Tickets
 #   Batches for different Enrolled repos are dispatched side by side, and
 #   their runs never wait on each other.
 #
-#   #46–#48 add implement, review and the spec queue here the same way: a
-#   job per task that routes, claims and dispatches `task=<task>`.
+# IMPLEMENT
+#   Someone puts `agent:implement` on a Ticket: the Owner, or explore's apply
+#   job when it called the Ticket an easy call. The same jobs run, on that
+#   one Ticket, if it is still open and still labelled when the run starts:
+#   route it, claim it (`agent:implement` off, `agent:in-progress` on), and
+#   start factory.yml in its Enrolled repo with `task=implement` and
+#   `ticket=<n>`. Implement never starts any other way: no event in an
+#   Enrolled repo starts it.
+#
+#   #47 and #48 add review and the spec queue here the same way.
 #
 # TOKENS
 #   Two Factory App tokens (ADR-0004), each minted in its job's first step,
@@ -46,29 +54,42 @@ name: Agent — Route The Tickets
 #   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory App.
 #   The Factory App installed on every repo in the Registry, and each one's
 #     caller workflow, factory.yml, on its default branch.
-#   The `agent:explore` label. A fresh clone of this repository does not have
-#     it, and no workflow can create the label that starts it. Create it once:
+#   The `agent:explore` and `agent:implement` labels. A fresh clone of this
+#     repository does not have them, and no workflow can create the label
+#     that starts it. Create them once:
 #       gh label create "agent:explore" --color 5319E7 \
 #         --description "The factory explores this ticket"
+#       gh label create "agent:implement" --color 5319E7 \
+#         --description "Hand this issue to the implementer agent"
 
 on:
   issues:
     types: [labeled]
 
-# One routing run at a time, and never cancelled. A label that lands mid-run
-# queues one more run behind this one, which lists the Tickets again when it
-# starts. The Tickets this run took are `agent:in-progress` by then, so
-# nothing is taken twice and nothing is lost. Every other label gets a
-# throwaway group of its own, so it can never bump that queued run.
+# One explore routing run at a time, and one implement routing run per
+# Ticket, never cancelled. A label that lands mid-run queues one more run
+# behind this one, which lists the Tickets again when it starts. The Tickets
+# this run took are `agent:in-progress` by then, so nothing is taken twice
+# and nothing is lost. GitHub keeps one queued run per group, and bumps an
+# older one for a newer; a bumped run has claimed nothing, so that loses
+# nothing either. Every other label gets a throwaway group of its own, so it
+# can never bump a queued run.
+#
+# These groups, with the trigger label coming off at the claim, are what
+# stop a runaway chain: a Ticket is built again only when the label goes
+# back on.
 concurrency:
-  group: ${{ github.event.label.name == 'agent:explore' && 'agent-route-explore' || format('ignore-{0}', github.run_id) }}
+  group: >-
+    ${{ github.event.label.name == 'agent:explore' && 'agent-route-explore'
+    || github.event.label.name == 'agent:implement' && format('agent-route-implement-{0}', github.event.issue.number)
+    || format('ignore-{0}', github.run_id) }}
   cancel-in-progress: false
 
 permissions: {}
 
 jobs:
-  route-explore:
-    if: github.event.label.name == 'agent:explore'
+  route:
+    if: github.event.label.name == 'agent:explore' || github.event.label.name == 'agent:implement'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -80,6 +101,8 @@ jobs:
 
     env:
       GH_REPO: ${{ github.repository }}
+      TRIGGER: ${{ github.event.label.name }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
 
     steps:
       - name: Mint the Factory App's token
@@ -107,10 +130,22 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
-          # Labels often go on several at once. Let them all land.
-          sleep 5
-          echo "numbers=$(gh issue list --state open --label "agent:explore" --limit 100 \
-            --json number --jq '[.[].number] | sort' )" >> "$GITHUB_OUTPUT"
+          if [ "$TRIGGER" = "agent:explore" ]; then
+            # Explore takes every open `agent:explore` Ticket, not just the
+            # one that was labelled. Labels often go on several at once. Let
+            # them all land.
+            sleep 5
+            numbers="$(gh issue list --state open --label "agent:explore" --limit 100 \
+              --json number --jq '[.[].number] | sort')"
+          else
+            # Implement takes the Ticket that was labelled, if it is still
+            # open and still has the label: a run queued behind another may
+            # find it closed, or the label taken off again.
+            numbers="$(gh issue view "$ISSUE_NUMBER" --json number,state,labels --jq \
+              'if .state == "OPEN" and any(.labels[]; .name == "agent:implement")
+               then [.number] else [] end')"
+          fi
+          echo "numbers=$numbers" >> "$GITHUB_OUTPUT"
 
       - name: Route the Tickets
         # Leaves each Ticket's route in $RUNNER_TEMP/route/routes.json. It
@@ -120,10 +155,11 @@ jobs:
         uses: ./.github/actions/route-tickets
         with:
           tickets: ${{ steps.open.outputs.numbers }}
-          trigger: agent:explore
+          trigger: ${{ github.event.label.name }}
           token: ${{ steps.app.outputs.token }}
 
       - name: Batch the Tickets by Enrolled repo
+        # Implement's one Ticket makes one batch of one.
         id: batch
         if: steps.route.outputs.routed != '' && steps.route.outputs.routed != '[]'
         # Plain `node` runs the .ts file: the route action's setup-node put
@@ -136,9 +172,9 @@ jobs:
           jq -c '.[]' "$RUNNER_TEMP/route/batches.json"
           echo "batches=$(jq -c . "$RUNNER_TEMP/route/batches.json")" >> "$GITHUB_OUTPUT"
 
-  dispatch-explore:
-    needs: route-explore
-    if: needs.route-explore.outputs.batches != '[]'
+  dispatch:
+    needs: route
+    if: needs.route.outputs.batches != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -149,12 +185,15 @@ jobs:
       # One Enrolled repo's trouble doesn't hold up the others' batches.
       fail-fast: false
       matrix:
-        batch: ${{ fromJSON(needs.route-explore.outputs.batches) }}
+        batch: ${{ fromJSON(needs.route.outputs.batches) }}
 
     env:
       GH_REPO: ${{ github.repository }}
       ENROLLED_REPO: ${{ matrix.batch.repo }}
       TICKETS: ${{ toJSON(matrix.batch.tickets) }}
+      TRIGGER: ${{ github.event.label.name }}
+      # `agent:explore` → explore, `agent:implement` → implement.
+      TASK: ${{ github.event.label.name == 'agent:explore' && 'explore' || 'implement' }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
@@ -170,7 +209,7 @@ jobs:
           permission-issues: write
           permission-actions: write
 
-      - name: Claim the batch
+      - name: Claim the Tickets
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
@@ -181,23 +220,28 @@ jobs:
           gh label create "agent:blocked" --color B60205 \
             --description "An agent run failed here. Its comment says how to retry" || true
           # The trigger comes off, so putting it back on is how you retry.
-          # `agent:in-progress` stays on until the explore run moves it on.
+          # `agent:in-progress` stays on until the run moves it on.
           for n in $(jq -r '.[]' <<< "$TICKETS"); do
-            gh issue edit "$n" --remove-label "agent:explore" || true
+            gh issue edit "$n" --remove-label "$TRIGGER" || true
             gh issue edit "$n" --remove-label "agent:blocked" || true
             gh issue edit "$n" --add-label "agent:in-progress"
           done
 
-      - name: Start explore in the Enrolled repo
+      - name: Start the run in the Enrolled repo
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           # workflow_dispatch runs the caller from the repo's default branch.
           ref="$(gh api "repos/$ENROLLED_REPO" --jq .default_branch)"
-          gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
-            -f task=explore -f tickets="$TICKETS"
-          echo "Explore of $TICKETS started in $ENROLLED_REPO."
+          case "$TASK" in
+            explore) gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
+                       -f task=explore -f tickets="$TICKETS" ;;
+            # A batch of one: implement builds a Ticket at a time.
+            implement) gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
+                         -f task=implement -f ticket="$(jq -r '.[0]' <<< "$TICKETS")" ;;
+          esac
+          echo "The $TASK run for $TICKETS started in $ENROLLED_REPO."
 
       - name: Mark blocked on failure
         # Claimed but never started: nothing else will move them on.
@@ -209,5 +253,5 @@ jobs:
             gh issue edit "$n" --remove-label "agent:in-progress" || true
             gh issue edit "$n" --add-label "agent:blocked" || true
             gh issue comment "$n" --body \
-              "Explore could not be started in \`${ENROLLED_REPO}\` — [logs](${RUN_URL}). Re-add \`agent:explore\` to retry. <!-- factory:status -->"
+              "The ${TASK} run could not be started in \`${ENROLLED_REPO}\` — [logs](${RUN_URL}). Re-add \`${TRIGGER}\` to retry. <!-- factory:status -->"
           done
