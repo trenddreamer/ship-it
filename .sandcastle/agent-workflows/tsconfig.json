@@ -2,6 +2,9 @@
   "extends": "../../tsconfig.json",
   "include": ["**/*.ts"],
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    // So a script Node runs as it is, with no `npm ci`, can import another:
+    // Node needs the `.ts` on the path. route/route-tickets.ts does.
+    "allowImportingTsExtensions": true
   }
 }
