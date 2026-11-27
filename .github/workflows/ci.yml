@@ -15,15 +15,23 @@ name: CI
 #   Settings → Branches → a rule for `main` → "Require status checks to
 #   pass" → add `check`. Until then a red run warns but doesn't block a
 #   merge.
+#
+# LEAN CI (ADR-0003)
+#   Actions minutes are shared with every Enrolled repo's CI and with the
+#   factory, so this workflow runs on pull requests only. It does not run
+#   again on the push to main that merging makes: that would repeat the
+#   checks the pull request has just passed. A new push to a pull request
+#   cancels that pull request's run if it is still going. And it is one job,
+#   so no trivial check bills a whole minute of its own.
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
 
+# One run per pull request (`github.ref` is refs/pull/<n>/merge). A newer push
+# makes the older run moot, so it is cancelled.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

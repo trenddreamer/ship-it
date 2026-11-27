@@ -57,8 +57,10 @@ name: Agent — Explore The Tickets
 # THE LABELS WHILE IT RUNS
 #   When the batch is listed, each issue swaps `agent:explore` for
 #   `agent:in-progress`. Apply swaps `agent:in-progress` for the issue's next
-#   label. If the run fails, the `finish` job marks every issue still in
-#   progress `agent:blocked`; re-add `agent:explore` to retry.
+#   label. If the run fails, the apply job's last steps mark every issue
+#   still in progress `agent:blocked`; re-add `agent:explore` to retry. They
+#   run even when the explore job failed, which is why apply waits on explore
+#   with `always()` and skips its plan steps unless explore succeeded.
 #
 # THE AGENT
 #   A Sandcastle script: .sandcastle/agent-workflows/explore/explore.ts, with
@@ -223,9 +225,12 @@ jobs:
           path: /tmp/evidence/*.png
           if-no-files-found: ignore
 
+  # Also the run's end: the same two label steps that close every other agent
+  # workflow, over the whole batch. They live here, not in a job of their own,
+  # so a few seconds of `gh` don't bill a whole minute of their own.
   apply:
     needs: explore
-    if: needs.explore.outputs.batch != '[]'
+    if: always() && needs.explore.outputs.batch != '' && needs.explore.outputs.batch != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -238,10 +243,12 @@ jobs:
       # or from an agent. It reads the plan as data.
       GH_TOKEN: ${{ secrets.FACTORY_PAT }}
       GH_REPO: ${{ github.repository }}
+      BATCH: ${{ needs.explore.outputs.batch }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
       - name: Take the screenshots from the explore job
+        if: needs.explore.result == 'success'
         # A pattern, not a name, so a run with no screenshots finds nothing
         # and carries on.
         uses: actions/download-artifact@v4
@@ -251,11 +258,11 @@ jobs:
           merge-multiple: true
 
       - name: Check the plan
+        if: needs.explore.result == 'success'
         env:
           # Through env, never pasted into the script. A `${{ }}` inside
           # `run:` is text bash runs, and the plan was written by an agent
           # that has just read a pile of untrusted issues.
-          BATCH: ${{ needs.explore.outputs.batch }}
           PLAN: ${{ needs.explore.outputs.plan }}
         run: |
           set -euo pipefail
@@ -288,12 +295,13 @@ jobs:
           ' /tmp/plan.json > /tmp/problems.txt
 
           if [ -s /tmp/problems.txt ]; then
-            echo "Refusing the plan. Nothing was written, and the finish job marks the batch agent:blocked." >&2
+            echo "Refusing the plan. Nothing was written, and the last steps of this job mark the batch agent:blocked." >&2
             cat /tmp/problems.txt >&2
             exit 1
           fi
 
       - name: Apply the plan
+        if: needs.explore.result == 'success'
         # Every label below goes on with FACTORY_PAT, and that matters for
         # `agent:implement`: a label applied by the built-in token does not
         # fire `issues: labeled`, so agent-implement.yml would never wake up
@@ -336,7 +344,7 @@ jobs:
             gh issue comment "$n" --body-file /tmp/comment.md "${attach[@]}"
 
             # The branch. Every path takes `agent:in-progress` off: this
-            # issue is done, and the finish job leaves it alone.
+            # issue is done, and the steps below leave it alone.
             if [ -n "$dup" ]; then
               gh issue edit "$n" --remove-label "agent:in-progress"
               gh api --method PATCH "repos/$GH_REPO/issues/$n" \
@@ -350,26 +358,9 @@ jobs:
             fi
           done
 
-  # The two jobs above are one run, so the run's end is here: the same two
-  # label steps that close every other agent workflow, over the whole batch.
-  finish:
-    needs: [explore, apply]
-    if: always() && needs.explore.outputs.batch != '' && needs.explore.outputs.batch != '[]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    # No checkout and no agent. It writes labels and comments with FACTORY_PAT.
-    permissions: {}
-
-    env:
-      GH_TOKEN: ${{ secrets.FACTORY_PAT }}
-      GH_REPO: ${{ github.repository }}
-      BATCH: ${{ needs.explore.outputs.batch }}
-      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-    steps:
       - name: Mark blocked on failure
-        if: contains(needs.*.result, 'failure')
+        # A step above failed, or the explore job did.
+        if: failure() || needs.explore.result == 'failure'
         run: |
           # Only the issues apply did not get to. One it did is already moved on.
           for n in $(jq -r '.[]' <<< "$BATCH"); do

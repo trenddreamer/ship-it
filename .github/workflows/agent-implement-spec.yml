@@ -18,8 +18,8 @@ name: Agent — Implement A Spec
 #   LOOP TWO — CHAIN.  Runs once per ticket. Take the frontier ticket — the
 #     lowest open position whose dependencies are all merged — build it, open
 #     a draft PR, then start this workflow again. Finishing one ticket is what
-#     triggers the next. That is the chain, and it is four lines at the bottom
-#     of this file. A ticket that depends on an unmerged PR waits: the chain
+#     triggers the next. That is the chain, and it is four lines at the end
+#     of each job that does work. A ticket that depends on an unmerged PR waits: the chain
 #     stops, and the cron picks the queue up after the merge.
 #
 # THE SHAPE, AS A PICTURE
@@ -39,11 +39,35 @@ name: Agent — Implement A Spec
 #              ▼                                      ▼
 #        ┌───────────────────────────────────────────────┐
 #        │ chain: gh workflow run (this file, again)     │
+#        │ the last step of decompose and of implement   │
 #        └───────────────────────────────────────────────┘
 #
 #   `survey` runs every time and decides which of the two loops this run is.
 #   The workflow has no memory between runs; the queue on GitHub is the state.
 #   That is the trick — the issues are the program counter.
+#
+# THE CHAIN
+#
+#   This is the loop. Four lines of `gh` at the end of a run, starting the same
+#   workflow again — which surveys the queue afresh, finds the next frontier
+#   ticket, and builds that one. Nothing schedules the queue and nothing holds
+#   it in memory. Each run ends by asking for the next.
+#
+#   It is the last step of both loops: of `decompose`, to start building what
+#   was just written; of `implement`, to take the next ticket. A step, not a
+#   job of its own, so a few seconds of `gh` don't bill a whole minute.
+#
+#   It stops when `survey` reports `drained` or `no-spec` — that is, when a run
+#   looks at the queue and finds nothing to do. The chain has no counter and no
+#   limit, so an empty queue is genuinely the only brake on it. That is worth
+#   sitting with before you point this at your own repository.
+#
+#   It re-dispatches after a *failed* ticket too (`if: always()`), and that is
+#   deliberate: the implement job parks a ticket it could not finish with
+#   `agent:blocked`, and `survey` skips a parked ticket, so the next run moves
+#   on to a different one instead of rebuilding the failure. Without that
+#   filter this `always()` would be an infinite retry of the same broken
+#   ticket, with a cron on top of it.
 #
 # WHAT IT NEEDS
 #
@@ -102,7 +126,7 @@ on:
     - cron: "*/15 * * * *"
 
   # 3. The button, and the chain. `workflow_dispatch` is how a human starts it
-  #    without labelling anything — and it is how the `chain` job at the bottom
+  #    without labelling anything — and it is how the `chain` step at the end of each job
   #    starts the next ticket. One trigger, two callers.
   workflow_dispatch:
     inputs:
@@ -394,6 +418,26 @@ jobs:
           gh issue comment "$SPEC" --body \
             "Decomposed into ${total} tickets, labelled \`spec:${SPEC}\`. The chain takes it from here. <!-- factory:status -->"
 
+      # ── THE CHAIN ── (see the note at the top of the file)
+      - name: Start the next ticket
+        if: always()
+        env:
+          # FACTORY_PAT, like every other call in this file — for simplicity,
+          # not because this hop needs it. `workflow_dispatch` is the one
+          # event the built-in GITHUB_TOKEN *is* allowed to start (with
+          # `actions: write`); it is labels and pushes it cannot. One token
+          # for the whole factory is easier to reason about than two, and
+          # the draft PR and the `agent:review` label above need the PAT
+          # anyway. The cost: the PAT needs Actions: write for this line.
+          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          echo "Spec #${SPEC}: asking for the next ticket on ${REF}."
+          gh workflow run agent-implement-spec.yml \
+            --ref "$REF" \
+            --field "spec_issue=${SPEC}"
+
   # ── LOOP TWO: implement one ticket ────────────────────────────────────────
   # Identical in spirit to agent-implement.yml, with one difference that makes
   # it a queue rather than a one-off: it closes the ticket it finished, which
@@ -638,37 +682,9 @@ jobs:
               --body "The chain could not finish this one (**${{ job.status }}**) — [logs](${RUN_URL}). Left open and labelled for a person. The queue will skip past it. Take \`agent:blocked\` off to put it back in the queue. <!-- factory:status -->"
           fi
 
-  # ── THE CHAIN ─────────────────────────────────────────────────────────────
-  #
-  # This is the loop. Four lines of `gh` at the end of a run, starting the same
-  # workflow again — which surveys the queue afresh, finds the next frontier
-  # ticket, and builds that one. Nothing schedules the queue and nothing holds
-  # it in memory. Each run ends by asking for the next.
-  #
-  # It runs after either loop: after `decompose`, to start building what was
-  # just written; after `implement`, to take the next ticket.
-  #
-  # It stops when `survey` reports `drained` or `no-spec` — that is, when a run
-  # looks at the queue and finds nothing to do. The chain has no counter and no
-  # limit, so an empty queue is genuinely the only brake on it. That is worth
-  # sitting with before you point this at your own repository.
-  #
-  # It re-dispatches after a *failed* ticket too, and that is deliberate: the
-  # implement job parks a ticket it could not finish with `agent:blocked`, and
-  # `survey` skips a parked ticket, so the next run moves on to a different one
-  # instead of rebuilding the failure. Without that filter this `always()` would
-  # be an infinite retry of the same broken ticket, with a cron on top of it.
-  chain:
-    needs: [survey, decompose, implement]
-    if: |
-      always() &&
-      needs.survey.result == 'success' &&
-      contains(fromJSON('["decompose", "implement"]'), needs.survey.outputs.mode)
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-
-    steps:
+      # ── THE CHAIN ── (see the note at the top of the file)
       - name: Start the next ticket
+        if: always()
         env:
           # FACTORY_PAT, like every other call in this file — for simplicity,
           # not because this hop needs it. `workflow_dispatch` is the one
@@ -676,11 +692,8 @@ jobs:
           # `actions: write`); it is labels and pushes it cannot. One token
           # for the whole factory is easier to reason about than two, and
           # the draft PR and the `agent:review` label above need the PAT
-          # anyway. The cost: the PAT
-          # needs Actions: write for this line.
+          # anyway. The cost: the PAT needs Actions: write for this line.
           GH_TOKEN: ${{ secrets.FACTORY_PAT }}
-          GH_REPO: ${{ github.repository }}
-          SPEC: ${{ needs.survey.outputs.spec }}
           REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
