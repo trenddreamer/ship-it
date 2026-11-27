@@ -12,7 +12,10 @@ description: >-
 #             list. It gets one comment with the reason and a link to the run,
 #             loses the label that started the run, and is labelled
 #             `agent:blocked`, the way a failed run marks it. Fixing the label
-#             and putting the trigger back on is how you retry.
+#             and putting the trigger back on is how you retry, unless the
+#             caller names another way (`retry`). A refused Ticket also loses
+#             `agent:in-progress`: the spec queue claims its Tickets before
+#             they are routed.
 #
 # The rule and its tests: .sandcastle/agent-workflows/route/route.ts. This
 # action does the I/O around it.
@@ -28,6 +31,12 @@ inputs:
   trigger:
     description: The label that started the run. A refused Ticket loses it.
     required: true
+  retry:
+    description: >-
+      How to retry a refused Ticket once its label is fixed, as a sentence.
+      Empty means re-add the trigger.
+    required: false
+    default: ""
   token:
     description: >-
       A Factory App token with Issues: read/write, to read the Tickets' labels,
@@ -55,6 +64,7 @@ runs:
         GH_REPO: ${{ github.repository }}
         TICKETS: ${{ inputs.tickets }}
         TRIGGER: ${{ inputs.trigger }}
+        RETRY: ${{ inputs.retry }}
         RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: |
         set -euo pipefail
@@ -75,17 +85,19 @@ runs:
           gh label create "agent:blocked" --color B60205 \
             --description "An agent run failed here. Its comment says how to retry" || true
         fi
+        retry="${RETRY:-Re-add \`${TRIGGER}\` to retry.}"
         for n in $refused; do
           # The reason goes in a file, never through the shell: it quotes the
           # Ticket's labels, and anyone who can label an issue names those.
           {
             printf '**Refused by the Registry.** '
             jq -r --argjson n "$n" '.[] | select(.number == $n) | .refusal' "$work/routes.json"
-            printf '\nThe Factory has not started on this Ticket. Fix its `repo:` label, then re-add `%s` to retry. [Logs](%s) <!-- factory:status -->\n' \
-              "$TRIGGER" "$RUN_URL"
+            printf '\nThe Factory has not started on this Ticket. Fix its `repo:` label. %s [Logs](%s) <!-- factory:status -->\n' \
+              "$retry" "$RUN_URL"
           } > "$work/reason.md"
           gh issue comment "$n" --body-file "$work/reason.md"
           gh issue edit "$n" --remove-label "$TRIGGER" || true
+          gh issue edit "$n" --remove-label "agent:in-progress" || true
           gh issue edit "$n" --add-label "agent:blocked"
         done
 
