@@ -13,6 +13,10 @@ React Router (framework mode) on Node 22, with Drizzle over SQLite and Vitest. R
 - `npm run db:migrate`, then `npm run db:seed`: set up the database in `data/` (override with `DATABASE_PATH`). The seed only fills an empty database; `npm run db:reset` rebuilds it from scratch.
 - Import from `app/` with `~/`, e.g. `~/modules/vendors`.
 
+## Enrolled repos
+
+Enrolling a repo, rotating the Factory's secrets, or an Enrolled repo's caller workflow or CI: follow [docs/enrolment/README.md](./docs/enrolment/README.md), which holds the steps, the lean-CI rules and `scripts/set-factory-secrets.sh`.
+
 ## Agent skills
 
 ### Issue tracker
