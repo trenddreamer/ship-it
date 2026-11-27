@@ -1,135 +1,122 @@
 name: Agent — Implement A Spec
 
 # ═══════════════════════════════════════════════════════════════════════════
-# THE WHOLE FACTORY, IN ONE FILE
+# THE SPEC QUEUE: THE HOME REPO'S HALF
 #
-# Everything before this ran once, on one ticket, because a person put a label
-# on it. This one takes a *spec*, turns it into a queue of tickets, and then
-# works the queue on its own until there is nothing left in it — and if nobody
+# Everything else runs once, on one Ticket, because a person put a label on
+# it. This takes a *spec*, turns it into a queue of tickets, and then works
+# the queue on its own until there is nothing left in it — and if nobody
 # ever labels anything, a clock starts it anyway.
 #
-# There are two loops here, and they are different loops. Keep them apart in
-# your head while you read:
+# There are two loops, and they are different loops. Keep them apart in your
+# head while you read:
 #
-#   LOOP ONE — DECOMPOSE.  Runs once per spec. An agent reads the spec issue
-#     and writes the queue: N child issues, ordered, each with a "Done when"
-#     a reviewer can check. Nothing is built. The output is tickets.
+#   LOOP ONE — DECOMPOSE.  Runs once per spec. An agent reads the spec and the
+#     Enrolled repo's code, and writes the queue: N tickets in the Home repo,
+#     ordered, each with a "Done when" a reviewer can check, each carrying
+#     the spec's `repo:` label. Nothing is built.
 #
 #   LOOP TWO — CHAIN.  Runs once per ticket. Take the frontier ticket — the
-#     lowest open position whose dependencies are all merged — build it, open
-#     a draft PR, then start this workflow again. Finishing one ticket is what
-#     triggers the next. That is the chain, and it is four lines at the end
-#     of each job that does work. A ticket that depends on an unmerged PR waits: the chain
-#     stops, and the cron picks the queue up after the merge.
+#     lowest open position whose dependencies are all merged — build it in the
+#     Enrolled repo, open a draft PR there, then start this workflow again.
+#     Finishing one ticket is what triggers the next. A ticket that depends on
+#     an unmerged PR waits: the chain stops, and the cron picks the queue up
+#     after the merge.
 #
-# THE SHAPE, AS A PICTURE
+# WHERE EACH PART RUNS (ADR-0002, ADR-0003)
 #
-#   label / cron / self-dispatch
-#             │
-#             ▼
-#        ┌─────────┐   no queue yet    ┌───────────┐
-#        │ survey  ├──────────────────►│ decompose │──┐
-#        └────┬────┘                   └───────────┘  │
-#             │ queue has a frontier ticket           │
-#             ▼                                       │
-#        ┌───────────┐                                │
-#        │ implement │ ──► draft PR ──► review        │
-#        └─────┬─────┘                                │
-#              │                                      │
-#              ▼                                      ▼
-#        ┌───────────────────────────────────────────────┐
-#        │ chain: gh workflow run (this file, again)     │
-#        │ the last step of decompose and of implement   │
-#        └───────────────────────────────────────────────┘
+#   The spec, its tickets, their order and their state are issues and labels
+#   in the Home repo. The work reads and writes an Enrolled repo's code, so it
+#   runs there. This file is the Home repo's half: it surveys and claims, and
+#   runs no agent and no code from any Enrolled repo.
 #
-#   `survey` runs every time and decides which of the two loops this run is.
-#   The workflow has no memory between runs; the queue on GitHub is the state.
-#   That is the trick — the issues are the program counter.
+#   label / cron / chain
+#           │
+#           ▼
+#     ┌───────────┐  claim the spec or the ticket, then dispatch
+#     │  survey   ├──────────────────────────────────────────────┐
+#     │  (Home)   │                                              │
+#     └───────────┘                                              ▼
+#           ▲                                       ┌─────────────────────┐
+#           │                                       │ agent-route.yml     │
+#           │                                       │ (Home): route it,   │
+#           │                                       │ dispatch factory.yml│
+#           │                                       │ in its Enrolled repo│
+#           │                                       └──────────┬──────────┘
+#           │                                                  ▼
+#           │            ┌───────────────────────────────────────────────┐
+#           └────────────┤ factory-implement-spec.yml (Enrolled):        │
+#             the chain: │ decompose → tickets in Home, or               │
+#             dispatch   │ build     → draft PR in Enrolled, review      │
+#             this file  └───────────────────────────────────────────────┘
+#
+#   `survey` runs every time and decides which loop this run is. The workflow
+#   has no memory between runs; the queue on GitHub is the state. That is the
+#   trick — the issues are the program counter. The rule and its tests are
+#   .sandcastle/agent-workflows/implement-spec/survey.ts.
+#
+# THE CLAIM, AND WHY IT IS HERE
+#
+#   The build runs in another repo while this cron keeps ticking, so nothing
+#   serialises a survey against a build any more. So the survey claims before
+#   it dispatches: `agent:in-progress` on the spec (decompose), or
+#   `agent:queued` off and `agent:in-progress` on the ticket (build). A
+#   survey that finds a spec or ticket in progress starts nothing. Only one
+#   ticket of a spec is built at a time, as before; a built ticket under
+#   review holds nothing.
 #
 # THE CHAIN
 #
-#   This is the loop. Four lines of `gh` at the end of a run, starting the same
-#   workflow again — which surveys the queue afresh, finds the next frontier
-#   ticket, and builds that one. Nothing schedules the queue and nothing holds
-#   it in memory. Each run ends by asking for the next.
+#   The last step of both loops, in the Enrolled repo, dispatches this
+#   workflow again in the Home repo, at its default branch, never through an
+#   event in the Enrolled repo. It re-dispatches after a *failed* run too,
+#   and that is deliberate: a failure parks the spec or the ticket with
+#   `agent:blocked`, and `survey` skips what is parked, so the next run moves
+#   on instead of rebuilding the failure. Without that this would be an
+#   infinite retry, with a cron on top of it.
 #
-#   It is the last step of both loops: of `decompose`, to start building what
-#   was just written; of `implement`, to take the next ticket. A step, not a
-#   job of its own, so a few seconds of `gh` don't bill a whole minute.
+#   It stops when `survey` finds nothing to do. The chain has no counter and
+#   no limit, so an empty queue, a parked ticket or a run in flight is the
+#   only brake on it.
 #
-#   It stops when `survey` reports `drained` or `no-spec` — that is, when a run
-#   looks at the queue and finds nothing to do. The chain has no counter and no
-#   limit, so an empty queue is genuinely the only brake on it. That is worth
-#   sitting with before you point this at your own repository.
+# ONE LIVE SPEC AT A TIME
 #
-#   It re-dispatches after a *failed* ticket too (`if: always()`), and that is
-#   deliberate: the implement job parks a ticket it could not finish with
-#   `agent:blocked`, and `survey` skips a parked ticket, so the next run moves
-#   on to a different one instead of rebuilding the failure. Without that
-#   filter this `always()` would be an infinite retry of the same broken
-#   ticket, with a cron on top of it.
+#   The cron takes the newest open `agent:implement-spec` spec that isn't
+#   parked, across every Enrolled repo. A second spec waits until the first
+#   is drained and loses its label, or is named by dispatch.
 #
 # WHAT IT NEEDS
 #
-#   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token. Both agents are
-#                               Sandcastle scripts in
-#                               .sandcastle/agent-workflows/implement-spec/.
 #   secrets.FACTORY_APP_ID,
 #   secrets.FACTORY_APP_PRIVATE_KEY
-#                             — the Factory App (ADR-0004). Each job's first
-#                               step mints a token from them with
-#                               actions/create-github-app-token, and only that
-#                               step sees the key. A token lives for one job:
-#                               it is revoked when the job ends, so each job
-#                               mints its own. Each covers this repository
-#                               only, with only what that job does:
-#
-#                                 survey     Issues: read/write (to refuse
-#                                            a spec the Registry won't route)
-#                                 decompose  Issues: read/write, Actions:
-#                                            read/write (the chain)
-#                                 implement  Contents, Pull requests, Issues
-#                                            and Actions: read/write
-#
-#                               None has Workflows: write, so a push that
-#                               changes `.github/workflows/` is refused.
-#
-#                               Every step that talks to GitHub uses the
-#                               token, and only those steps: no agent step,
-#                               and no step that runs code an agent wrote, has
-#                               it in its environment. That keeps it out of
-#                               the agent's way, not out of its reach: the
-#                               agent shares a machine with the later token
-#                               steps, unsandboxed. The real defence is who can
-#                               reach the agent at all — collaborator-only
-#                               issues, comments from collaborators and the
-#                               Factory's own bot, and labels only a
-#                               collaborator or the Factory can apply.
-#
-#                               Why not the built-in GITHUB_TOKEN? The draft
-#                               PR: by default the built-in GITHUB_TOKEN may
-#                               not open one. And the App's token makes the
-#                               Factory's commits, PRs and comments its bot's,
-#                               `<slug>[bot]`, so the Owner can approve them.
-#   secrets.GITHUB_TOKEN      — supplied by Actions, and used for the checkout
-#                               and nothing else. `permissions:` shrinks it to
-#                               match.
+#                             — the Factory App (ADR-0004). The job's first
+#                               step mints a token from them, the only step
+#                               that sees the key. It covers this repository
+#                               only, with Issues: read/write (read the
+#                               queue, refuse or claim) and Actions:
+#                               read/write (dispatch agent-route.yml). The
+#                               Enrolled repo's own token is minted by the
+#                               routing job, not here.
+#   secrets.GITHUB_TOKEN      — the sparse checkout and nothing else.
 #   The `agent:implement-spec` label. A fresh clone of this repository does
 #     not have it, and no workflow can create the label that starts it. Create
 #     it once (the cron and the button need no label):
 #       gh label create "agent:implement-spec" --color 5319E7 \
 #         --description "Work this spec through the implement-spec queue"
+#   The spec needs one `repo:` label the Registry (repos.yml) lists, like any
+#   Ticket. Its tickets take the same one.
 # ═══════════════════════════════════════════════════════════════════════════
 
 on:
-  # 1. A person opens the queue by labelling the spec issue.
+  # 1. A person opens the queue by labelling the spec.
   issues:
     types: [labeled]
 
   # 2. The clock. Every fifteen minutes it looks at the queue and moves it on
   #    one ticket, whether or not anyone asked. This is the trigger that makes
   #    the factory a thing that runs rather than a thing you run: the queue
-  #    drains overnight and you read pull requests in the morning.
+  #    drains overnight and you read pull requests in the morning. It is also
+  #    what picks the queue up after a merge, when the chain has stopped.
   #
   #    Two honest caveats, because they will bite you on the day:
   #      • GitHub schedules are best-effort. A `*/15` cron on a busy hour can
@@ -141,8 +128,8 @@ on:
     - cron: "*/15 * * * *"
 
   # 3. The button, and the chain. `workflow_dispatch` is how a human starts it
-  #    without labelling anything — and it is how the `chain` step at the end of each job
-  #    starts the next ticket. One trigger, two callers.
+  #    without labelling anything — and it is how the last step of each loop,
+  #    in the Enrolled repo, starts the next ticket. One trigger, two callers.
   workflow_dispatch:
     inputs:
       spec_issue:
@@ -150,32 +137,31 @@ on:
         required: false
         type: string
 
-# A ceiling on the GITHUB_TOKEN, which now only checks the code out. Pushing,
-# labelling, commenting and dispatching all go through the Factory App's
-# token, minted afresh in each job.
+# A ceiling on the GITHUB_TOKEN, which only checks out the Registry and the
+# scripts. Everything else goes through the Factory App's token.
 permissions:
-  contents: read # the checkout
+  contents: read # the sparse checkout
 
-# One run of this workflow at a time, repo-wide, and never cancelled. The queue
-# is shared state: two runs at once would both pick the same frontier ticket
-# and build it twice. `cancel-in-progress: false` matters just as much — a
-# cron tick must not kill a build that is halfway through.
+# One survey at a time, repo-wide, and never cancelled: two at once would both
+# pick the same frontier ticket and claim it twice. `cancel-in-progress:
+# false` matters just as much — a cron tick must not kill a survey that is
+# halfway through a claim.
 #
 # Only the runs that can do something join that group. Every label on every
-# issue starts this workflow, and the factory's own labels do too now that
-# the Factory App applies them (`agent:in-progress` when it claims a ticket,
-# `agent:blocked` when it parks one). A group holds one running run and one
-# waiting run, and a newcomer replaces the one waiting — so those label runs,
-# left in the group, could bump the chain's next run out of the queue. Every
-# other label gets a throwaway group of its own, and is skipped for free.
+# issue starts this workflow, and the factory's own labels do too (`agent:in-
+# progress` when it claims, `agent:blocked` when it parks). A group holds one
+# running run and one waiting run, and a newcomer replaces the one waiting —
+# so those label runs, left in the group, could bump the chain's next run out
+# of the queue. Every other label gets a throwaway group of its own, and is
+# skipped for free.
 concurrency:
   group: ${{ (github.event_name != 'issues' || github.event.label.name == 'agent:implement-spec') && 'agent-implement-spec' || format('ignore-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
   # ── survey ────────────────────────────────────────────────────────────────
-  # Routes the spec, reads the queue and decides what this run is. No agent,
-  # and a checkout of three paths: `gh`, `jq` and the routing script, so it
+  # Routes the spec, reads the queue, decides what this run is, claims it and
+  # hands it to the routing job. No agent, and a checkout of four paths, so it
   # is cheap enough to run every fifteen minutes forever.
   survey:
     # Label runs are filtered here; cron and dispatch runs carry no label and
@@ -187,13 +173,10 @@ jobs:
     timeout-minutes: 5
 
     outputs:
-      # 'decompose' | 'implement' | 'drained' | 'no-spec' | 'refused'.
-      # A spec the Registry refused is the one case with no mode from either
-      # step: the queue step is skipped.
+      # 'decompose' | 'implement' | 'busy' | 'drained' | 'no-spec' | 'refused'.
       mode: ${{ steps.survey.outputs.mode || steps.spec.outputs.mode || 'refused' }}
       spec: ${{ steps.spec.outputs.spec }}
       ticket: ${{ steps.survey.outputs.ticket }}
-      remaining: ${{ steps.survey.outputs.remaining }}
 
     env:
       GH_REPO: ${{ github.repository }}
@@ -202,40 +185,44 @@ jobs:
 
     steps:
       - name: Mint the Factory App's token
-        # Survey reads the queue, and it can refuse the spec: comment on it
-        # and label it. So Issues: read/write, and nothing else.
+        # This repository only. Issues to read the queue, refuse a spec and
+        # claim; Actions to dispatch the routing job.
         id: app
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
           permission-issues: write
+          permission-actions: write
 
       - name: Find the spec
         id: spec
         env:
-          # This job runs `gh`, `jq` and the routing script, and no agent.
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
 
-          # 1. Which spec are we working? The trigger may have named one. A
-          #    cron tick did not, so find the open issue that is labelled as
-          #    the live spec.
+          # Which spec are we working? The trigger may have named one. A cron
+          # tick did not, so take the newest open spec that isn't parked.
           spec="${REQUESTED_SPEC:-}"
           if [ -z "$spec" ]; then
-            spec=$(gh issue list --state open --label "agent:implement-spec" \
-              --limit 1 --json number --jq '.[0].number // empty')
+            spec=$(gh issue list --state open --label "agent:implement-spec" --limit 100 \
+              --json number,labels \
+              --jq '[.[] | select(any(.labels[]; .name == "agent:blocked") | not)] | .[0].number // empty')
           fi
           if [ -z "$spec" ]; then
             echo "No spec is labelled agent:implement-spec. Nothing to do."
             echo "mode=no-spec" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          if ! [[ "$spec" =~ ^[0-9]+$ ]]; then
+            echo "::error::The spec_issue input must be a number."
+            exit 1
+          fi
           echo "spec=$spec" >> "$GITHUB_OUTPUT"
           echo "Working spec #$spec"
 
-      - name: Checkout the Registry and the routing script
+      - name: Checkout the Registry and the scripts
         if: steps.spec.outputs.spec != ''
         uses: actions/checkout@v4
         with:
@@ -244,13 +231,14 @@ jobs:
             repos.yml
             .github/actions
             .sandcastle/agent-workflows/route
+            .sandcastle/agent-workflows/implement-spec
 
       - name: Route the spec
         # Through the Registry, repos.yml (ADR-0002). A refused spec gets one
         # comment with the reason, loses `agent:implement-spec` (so the next
         # cron tick doesn't find it and refuse it again), and is marked
-        # `agent:blocked`. Nothing else runs. Its tickets take its `repo:`
-        # label when decompose writes them.
+        # `agent:blocked`. Nothing else runs. The routing job routes the spec
+        # or ticket again before it dispatches anything.
         id: route
         if: steps.spec.outputs.spec != ''
         uses: ./.github/actions/route-tickets
@@ -259,7 +247,11 @@ jobs:
           trigger: agent:implement-spec
           token: ${{ steps.app.outputs.token }}
 
-      - name: Find the frontier ticket
+      - name: Survey the queue
+        # Plain `node` runs the .ts file: the route action's setup-node put
+        # Node 22 on the PATH. Every ticket decompose writes is labelled
+        # `spec:<number>`; no such issues, open or closed, means the spec has
+        # never been decomposed.
         id: survey
         if: steps.route.outputs.routed != '' && steps.route.outputs.routed != '[]'
         env:
@@ -267,558 +259,54 @@ jobs:
           SPEC: ${{ steps.spec.outputs.spec }}
         run: |
           set -euo pipefail
-          spec="$SPEC"
+          gh issue view "$SPEC" --json labels > /tmp/spec.json
+          gh issue list --state all --label "spec:${SPEC}" --limit 100 \
+            --json number,state,labels,body > /tmp/queue.json
+          node .sandcastle/agent-workflows/implement-spec/survey-queue.ts /tmp/spec.json \
+            < /tmp/queue.json > /tmp/survey.json
+          jq . /tmp/survey.json
 
-          # 2. Does a queue exist for it yet? Every ticket this workflow
-          #    writes is labelled `spec:<number>`. No such issues, open or
-          #    closed, means the spec has never been decomposed.
-          gh issue list --state all --label "spec:${spec}" --limit 100 \
-            --json number,title,state,labels,body > /tmp/queue.json
-          total=$(jq 'length' /tmp/queue.json)
-          if [ "$total" -eq 0 ]; then
-            echo "No queue for spec #$spec yet. This run decomposes it."
-            echo "mode=decompose" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # 3. The frontier. The lowest open position whose `Depends on:`
-          #    positions are all closed. Ticket bodies carry both lines,
-          #    written by the decompose loop.
-          #
-          #    Closed means merged. A built ticket stays open, labelled
-          #    `agent:built`, until its PR merges and the PR's `Closes #<n>`
-          #    closes it. Every branch starts from main, so a ticket built
-          #    while what it depends on is still only in an open PR would be
-          #    built without it.
-          jq -r '
-            [ .[]
-              | { number,
-                  state,
-                  labels: [ .labels[].name ],
-                  position: ((.body | capture("Position:\\s*(?<p>[0-9]+)").p // "999") | tonumber),
-                  depends: ((.body | capture("Depends on:\\s*(?<d>[0-9, ]*)").d // "")
-                             | split(",") | map(gsub("\\s";"")) | map(select(length>0) | tonumber)) }
-            ] | sort_by(.position)
-          ' /tmp/queue.json > /tmp/queue-sorted.json
-
-          closed_positions=$(jq -c '[ .[] | select(.state=="CLOSED") | .position ]' /tmp/queue-sorted.json)
-
-          # `agent:blocked` is the label the implement job puts on a ticket it
-          # could not finish. Such a ticket stays OPEN on purpose — a failure
-          # must not drain silently out of the queue — so without this filter
-          # every cron tick picks the same broken ticket, forever. Parked means
-          # out of the frontier until a person takes the label off.
-          #
-          # `agent:built` is out of the frontier too: its PR is open, and
-          # building it again would open a second one.
-          ticket=$(jq -r --argjson closed "$closed_positions" '
-            [ .[]
-              | select(.state=="OPEN")
-              | select(.labels | index("agent:blocked") | not)
-              | select(.labels | index("agent:built") | not)
-              | select(all(.depends[]; . as $d | $closed | index($d) != null))
-            ] | .[0].number // empty
-          ' /tmp/queue-sorted.json)
-
-          parked_count=$(jq '[ .[] | select(.state=="OPEN") | select(.labels | index("agent:blocked")) ] | length' /tmp/queue-sorted.json)
-          built_count=$(jq '[ .[] | select(.state=="OPEN") | select(.labels | index("agent:built")) ] | length' /tmp/queue-sorted.json)
-          open_count=$(jq '[ .[] | select(.state=="OPEN") | select(.labels | index("agent:blocked") | not) | select(.labels | index("agent:built") | not) ] | length' /tmp/queue-sorted.json)
-          echo "remaining=$open_count" >> "$GITHUB_OUTPUT"
-          if [ "$parked_count" -gt 0 ]; then
-            echo "::notice::Spec #$spec has $parked_count ticket(s) parked for a person. Take \`agent:blocked\` off one to put it back in the queue."
-          fi
-          if [ "$built_count" -gt 0 ]; then
-            echo "::notice::Spec #$spec has $built_count ticket(s) built and waiting for their PRs to merge."
-          fi
-
-          if [ -z "$ticket" ]; then
-            if [ "$open_count" -eq 0 ]; then
-              echo "Queue for spec #$spec is drained."
-              echo "mode=drained" >> "$GITHUB_OUTPUT"
-            elif [ "$built_count" -gt 0 ]; then
-              # Everything left waits on a PR that hasn't merged. Stop the
-              # chain; the cron picks the queue up again after a merge.
-              echo "Spec #$spec: $open_count open ticket(s) wait on PRs to merge."
-              echo "mode=drained" >> "$GITHUB_OUTPUT"
-            else
-              # Open tickets exist but every one is blocked. That is a cycle
-              # or a ticket waiting on a human, and either way looping on it
-              # would burn a run every fifteen minutes forever.
-              echo "::warning::Spec #$spec has $open_count open tickets and none are unblocked."
-              echo "mode=drained" >> "$GITHUB_OUTPUT"
-            fi
-            exit 0
-          fi
-
-          echo "Frontier ticket: #$ticket ($open_count open)"
-          echo "ticket=$ticket" >> "$GITHUB_OUTPUT"
-          echo "mode=implement" >> "$GITHUB_OUTPUT"
-
-  # ── LOOP ONE: decompose ───────────────────────────────────────────────────
-  # One spec in, a queue of tickets out. Runs at most once per spec: the
-  # moment it creates the first `spec:<n>` issue, `survey` will never choose
-  # this mode again.
-  decompose:
-    needs: survey
-    if: needs.survey.outputs.mode == 'decompose'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    env:
-      GH_REPO: ${{ github.repository }}
-      SPEC: ${{ needs.survey.outputs.spec }}
-
-    steps:
-      - name: Mint the Factory App's token
-        # First, and the only step that sees the private key. Issues to read
-        # the spec and write the queue; Actions to start the next run.
-        id: app
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.FACTORY_APP_ID }}
-          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
-          permission-issues: write
-          permission-actions: write
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - name: Read the spec
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          set -euo pipefail
-          gh issue view "$SPEC" --json number,title,body \
-            --jq '"# " + .title + "\n\n" + .body' > /tmp/spec.md
-          cat /tmp/spec.md
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
-
-      - name: Install Matt Pocock's skills
-        # Not pinned on purpose: CI follows the latest plugin, like a local install.
-        run: |
-          claude plugin marketplace add anthropics/claude-plugins-official
-          claude plugin install mattpocock-skills@claude-plugins-official
-
-      - name: Cache agent-browser's Chrome
-        uses: actions/cache@v4
-        with:
-          path: ~/.agent-browser/browsers
-          key: agent-browser-0.27.0-${{ runner.os }}
-
-      - name: Install agent-browser
-        # The agent drives the app with it for screenshots and checks. Without
-        # it here, each run installs it mid-session.
-        run: |
-          npm install -g agent-browser@0.27.0
-          agent-browser install
-
-      - name: Decompose the spec into a queue
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          OUTPUT_DIR: ${{ runner.temp }}
-        # Reads only. The queue comes back as queue.json, shaped and validated
-        # by .sandcastle/agent-workflows/implement-spec/decomposition-schema.ts.
-        run: npx tsx .sandcastle/agent-workflows/implement-spec/decompose.ts
-
-      - name: Write the queue as issues
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          set -euo pipefail
-          cp "$RUNNER_TEMP/queue.json" /tmp/queue.json
-          jq '.' /tmp/queue.json
-
-          # Labels this queue uses. Creating them is idempotent enough with
-          # `|| true`, and it means a fresh clone of the repo works first time.
-          gh label create "spec:${SPEC}" --color BFD4F2 \
-            --description "A ticket in the queue for spec #${SPEC}" || true
-          gh label create "agent:queued" --color FEF2C0 \
-            --description "Waiting for the implement-spec chain" || true
-
-          # Each ticket goes where its spec goes: survey routed the spec by
-          # its one `repo:` label, so the tickets carry the same one.
-          repo_label="$(gh issue view "$SPEC" --json labels \
-            --jq '[.labels[].name | select(startswith("repo:"))] | first // empty')"
-          repo=()
-          if [ -n "$repo_label" ]; then repo=(--label "$repo_label"); fi
-
-          total=$(jq '.tickets | length' /tmp/queue.json)
-          echo "Writing $total tickets for spec #${SPEC}."
-
-          # A ticket's screenshots are /tmp/evidence/<position>-*.png. --attach
-          # uploads them and swaps each path in the body for its URL.
-          # nullglob: none means no --attach.
-          shopt -s nullglob
-
-          for i in $(seq 0 $((total - 1))); do
-            title=$(jq -r ".tickets[$i].title" /tmp/queue.json)
-            position=$(jq -r ".tickets[$i].position" /tmp/queue.json)
-            shape=$(jq -r ".tickets[$i].shape" /tmp/queue.json)
-            depends=$(jq -r ".tickets[$i].depends_on | join(\", \")" /tmp/queue.json)
-
-            # The two machine-read lines. `survey` parses these out of the
-            # body on every single run — they are the queue's real state, and
-            # they live where a human can read them too.
-            {
-              echo "Part of #${SPEC}"
-              echo ""
-              echo "Position: ${position}"
-              echo "Depends on: ${depends}"
-              echo "Shape: ${shape}"
-              echo ""
-              echo "---"
-              echo ""
-              jq -r ".tickets[$i].body" /tmp/queue.json
-            } > /tmp/ticket-body.md
-
-            attach=()
-            for png in /tmp/evidence/"${position}"-*.png; do attach+=(--attach "$png"); done
-
-            gh issue create \
-              --title "$title" \
-              --body-file /tmp/ticket-body.md \
-              --label "spec:${SPEC}" \
-              --label "agent:queued" \
-              "${repo[@]}" \
-              "${attach[@]}"
+          jq -r '.notices[]' /tmp/survey.json | while read -r notice; do
+            echo "::notice::Spec #${SPEC}: ${notice}"
           done
+          mode="$(jq -r .mode /tmp/survey.json)"
+          if [ "$mode" = "busy" ] || [ "$mode" = "drained" ]; then
+            echo "Spec #${SPEC}: $(jq -r .reason /tmp/survey.json)"
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "ticket=$(jq -r '.ticket // empty' /tmp/survey.json)" >> "$GITHUB_OUTPUT"
 
-          gh issue comment "$SPEC" --body \
-            "Decomposed into ${total} tickets, labelled \`spec:${SPEC}\`. The chain takes it from here. <!-- factory:status -->"
-
-      # ── THE CHAIN ── (see the note at the top of the file)
-      - name: Start the next ticket
-        if: always()
-        env:
-          # The App's token, like every other call in this file — so the run
-          # shows as the Factory's, not because this hop needs it.
-          # `workflow_dispatch` is the one event the built-in GITHUB_TOKEN
-          # *is* allowed to start (with `actions: write`); it is labels and
-          # pushes it cannot. The cost: this job's token carries Actions:
-          # write for this line.
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          REF: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          echo "Spec #${SPEC}: asking for the next ticket on ${REF}."
-          gh workflow run agent-implement-spec.yml \
-            --ref "$REF" \
-            --field "spec_issue=${SPEC}"
-
-  # ── LOOP TWO: implement one ticket ────────────────────────────────────────
-  # Identical in spirit to agent-implement.yml, with one difference that makes
-  # it a queue rather than a one-off: it closes the ticket it finished, which
-  # is what lets the next run's `survey` step move the frontier forward.
-  #
-  # Like agent-implement.yml, every run pushes to a branch of its own: the run
-  # id is in the name. A parked ticket that a person puts back in the queue is
-  # built on a new branch, not pushed onto the one the failed run left.
-  implement:
-    needs: survey
-    if: needs.survey.outputs.mode == 'implement'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-
-    env:
-      GH_REPO: ${{ github.repository }}
-      SPEC: ${{ needs.survey.outputs.spec }}
-      TICKET: ${{ needs.survey.outputs.ticket }}
-      BRANCH: agent/spec-${{ needs.survey.outputs.spec }}-ticket-${{ needs.survey.outputs.ticket }}-${{ github.run_id }}
-      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-    steps:
-      - name: Mint the Factory App's token
-        # First, and the only step that sees the private key. What building
-        # a ticket uses (a branch, a pull request, the ticket's labels and
-        # comments), plus Actions to start the next run.
-        id: app
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.FACTORY_APP_ID }}
-          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
-          permission-issues: write
-          permission-actions: write
-
-      - name: Who the Factory is
-        # The App's bot account, so its commits are linked to it on GitHub:
-        # `<slug>[bot]`, and the noreply address with the bot's user id.
-        id: bot
+      - name: Claim, then hand to the routing job
+        # The claim comes first (see THE CLAIM above). agent-route.yml routes
+        # the spec or ticket, and dispatches factory.yml in its Enrolled repo
+        # with `task=decompose` or `task=build`.
+        if: steps.survey.outputs.mode == 'decompose' || steps.survey.outputs.mode == 'implement'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
-          LOGIN: ${{ steps.app.outputs.app-slug }}[bot]
-        run: |
-          set -euo pipefail
-          id="$(gh api "/users/${LOGIN}" --jq .id)"
-          echo "login=${LOGIN}" >> "$GITHUB_OUTPUT"
-          echo "email=${id}+${LOGIN}@users.noreply.github.com" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
-
-      - name: Install Matt Pocock's skills
-        # Not pinned on purpose: CI follows the latest plugin, like a local install.
-        run: |
-          claude plugin marketplace add anthropics/claude-plugins-official
-          claude plugin install mattpocock-skills@claude-plugins-official
-
-      - name: Cache agent-browser's Chrome
-        uses: actions/cache@v4
-        with:
-          path: ~/.agent-browser/browsers
-          key: agent-browser-0.27.0-${{ runner.os }}
-
-      - name: Install agent-browser
-        # The agent drives the app with it for screenshots and checks. Without
-        # it here, each run installs it mid-session.
-        run: |
-          npm install -g agent-browser@0.27.0
-          agent-browser install
-
-      - name: Migrate and seed the database
-        run: |
-          npm run db:migrate
-          npm run db:seed
-
-      - name: Claim the ticket
-        # Moving the label first is what stops a cron tick that lands during a
-        # long build from picking the same ticket up again.
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SPEC: ${{ steps.spec.outputs.spec }}
+          MODE: ${{ steps.survey.outputs.mode }}
+          TICKET: ${{ steps.survey.outputs.ticket }}
         run: |
           set -euo pipefail
           gh label create "agent:in-progress" --color FBCA04 \
             --description "An agent is working on this right now" || true
-          gh issue edit "$TICKET" \
-            --remove-label "agent:queued" \
-            --add-label "agent:in-progress"
-          gh issue comment "$TICKET" --body "Building — [logs](${RUN_URL}). <!-- factory:status -->"
-
-      - name: Read the ticket and its spec
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          set -euo pipefail
-          # Same filter as agent-implement.yml: a comment reaches the agent
-          # only when its author has write access to this repo, or it is the
-          # Factory's own bot (GitHub gives the bot CONTRIBUTOR or NONE). Any
-          # other bot, the Feedback App's above all, never gets in. The
-          # Factory's status lines -- "Building", the failure that parked a
-          # ticket -- carry a hidden `<!-- factory:status -->` and are dropped.
-          # This step only fetches; the next filters, without the token.
-          gh issue view "$TICKET" --json number,title,body > /tmp/ticket.json
-          # REST, not `gh issue view --json comments`: only REST gives a bot's
-          # full `<slug>[bot]` login and says it is a bot.
-          gh api --paginate "repos/$GH_REPO/issues/$TICKET/comments" --jq '.[]' \
-            | jq -s . > /tmp/all-comments.json
-          gh issue view "$SPEC" --json number,title,body \
-            --jq '"# Spec: " + .title + "\n\n" + .body' > /tmp/spec.md
-
-      - name: Keep the comments that may steer the agent
-        # The rule and its tests:
-        # .sandcastle/agent-workflows/shared/steering-comments.ts.
-        env:
-          FACTORY_BOT: ${{ steps.bot.outputs.login }}
-        run: |
-          set -euo pipefail
-          npx tsx .sandcastle/agent-workflows/shared/keep-steering-comments.ts "$FACTORY_BOT" \
-            < /tmp/all-comments.json > /tmp/comments.json
-          rm /tmp/all-comments.json
-          jq -r --slurpfile comments /tmp/comments.json '
-            "# " + .title + "\n\n" + .body
-            + (if ($comments[0] | length) > 0
-               then "\n\n## Comments\n"
-                 + ([$comments[0][] | "\n### " + .author + " (" + .createdAt + ")\n\n" + .body + "\n"] | join(""))
-               else "" end)
-          ' /tmp/ticket.json > /tmp/ticket.md
-          cat /tmp/ticket.md
-
-      - name: Open the branch
-        id: branch
-        env:
-          GIT_NAME: ${{ steps.bot.outputs.login }}
-          GIT_EMAIL: ${{ steps.bot.outputs.email }}
-        run: |
-          set -euo pipefail
-          git config user.name "$GIT_NAME"
-          git config user.email "$GIT_EMAIL"
-          git checkout -b "$BRANCH"
-          echo "base=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          # Same as agent-implement.yml: the agent commits through the repo's
-          # pre-commit hook, which `npm ci` installed. Fail if it did not.
-          if [ "$(git config core.hooksPath)" != ".husky/_" ]; then
-            echo "::error::The pre-commit hook is not installed (core.hooksPath is '$(git config core.hooksPath)')."
-            exit 1
-          fi
-
-      - name: Build the ticket
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-        run: npx tsx .sandcastle/agent-workflows/implement-spec/build.ts
-
-      - name: Check the agent committed
-        # A run with no commit fails here, so the ticket is parked with
-        # `agent:blocked` below instead of shipping an empty PR.
-        env:
-          BASE: ${{ steps.branch.outputs.base }}
-        run: |
-          set -euo pipefail
-          commits=$(git rev-list --count "$BASE..HEAD")
-          if [ "$commits" -eq 0 ]; then
-            echo "::error::The agent finished #${TICKET} without committing anything."
-            git status --short
-            exit 1
-          fi
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::The agent left uncommitted changes on #${TICKET}. The PR would not contain them."
-            git status --short
-            exit 1
-          fi
-          git log --oneline "$BASE..HEAD"
-
-      - name: Push
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          set -euo pipefail
-          # The token reaches git for this one push, with hooks off, so
-          # nothing the agent wrote runs while it holds it.
-          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          git -c core.hooksPath=/dev/null \
-            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
-            push "https://github.com/${GH_REPO}.git" "HEAD:refs/heads/${BRANCH}"
-
-      - name: Open the draft PR
-        id: ship
-        env:
-          # One of the two hops the built-in token cannot make: by default
-          # the built-in GITHUB_TOKEN is not allowed to open a pull request,
-          # so `gh pr create` with it fails. This step runs nothing the agent
-          # wrote: it reads the agent's summary as text and hands it to `gh`.
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          set -euo pipefail
-          title=$(gh issue view "$TICKET" --json title --jq .title)
-          [ -s /tmp/pr-body.md ] || echo "Built by the implement-spec chain." > /tmp/pr-body.md
-          {
-            echo ""
-            echo "---"
-            echo ""
-            echo "Closes #${TICKET}. Part of spec #${SPEC}."
-            echo "Built unattended by [this run](${RUN_URL}); nobody has read it yet."
-          } >> /tmp/pr-body.md
-
-          # Uploads the agent's screenshots and swaps each /tmp/evidence path
-          # in the body for its URL. nullglob: none means no --attach.
-          shopt -s nullglob
-          attach=()
-          for png in /tmp/evidence/*.png; do attach+=(--attach "$png"); done
-
-          url="$(gh pr create \
-            --draft \
-            --base "${{ github.event.repository.default_branch || 'main' }}" \
-            --head "$BRANCH" \
-            --title "$title" \
-            --body-file /tmp/pr-body.md \
-            "${attach[@]}")"
-
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "shipped=true" >> "$GITHUB_OUTPUT"
-
-      - name: Hand the pull request to the reviewer
-        # Through the routing job, agent-route.yml, with `task=review`, the
-        # ticket and the pull request, as implement does: it routes the
-        # ticket and starts the review in its Enrolled repo
-        # (factory-review.yml). No label on the pull request is involved.
-        if: steps.ship.outputs.shipped == 'true'
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          GH_REPO: ${{ github.repository }}
-          PR_URL: ${{ steps.ship.outputs.url }}
-        run: |
-          set -euo pipefail
           ref="$(gh api "repos/$GH_REPO" --jq .default_branch)"
 
-          # No `|| true` and no `::warning` fallback here, on purpose. If this
-          # fails the factory has stopped at its last hop, and a green tick over
-          # a chain that ended is worse than a red one.
-          gh workflow run agent-route.yml --ref "$ref" \
-            -f task=review -f ticket="$TICKET" -f pr="${PR_URL##*/}"
-
-      - name: Close the ticket and move the queue on
-        if: always()
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          PR_URL: ${{ steps.ship.outputs.url }}
-        run: |
-          set -euo pipefail
-          gh issue edit "$TICKET" --remove-label "agent:in-progress" || true
-
-          if [ "${{ steps.ship.outputs.shipped }}" = "true" ]; then
-            # Left open, labelled `agent:built`. The PR's `Closes #<n>` closes
-            # it on merge, and only then does whatever depended on it become
-            # buildable: every branch starts from main, so building it any
-            # sooner would build it without this ticket's code.
-            gh label create "agent:built" --color 0E8A16 \
-              --description "Built; waiting for its pull request to merge" || true
-            gh issue edit "$TICKET" --add-label "agent:built"
-            gh issue comment "$TICKET" \
-              --body "Built and opened as a draft PR, ${PR_URL}, from \`${BRANCH}\` — [logs](${RUN_URL}). Tickets that depend on this one wait until it merges; the pull request is where the review happens. If the PR is closed without merging, take \`agent:built\` off to build this ticket again. <!-- factory:status -->"
+          if [ "$MODE" = "decompose" ]; then
+            claimed="$SPEC"
+            gh issue edit "$SPEC" --add-label "agent:in-progress"
+            dispatch=(-f task=decompose -f ticket="$SPEC" -f spec="$SPEC")
           else
-            # Left open on purpose. A failed ticket must not silently drain
-            # out of the queue, and it must not be retried forever either — so
-            # it is parked for a person.
-            gh label create "agent:blocked" --color B60205 \
-              --description "An agent run failed here. Its comment says how to retry" || true
-            gh issue edit "$TICKET" --add-label "agent:blocked"
-            gh issue comment "$TICKET" \
-              --body "The chain could not finish this one (**${{ job.status }}**) — [logs](${RUN_URL}). Left open and labelled for a person. The queue will skip past it. Take \`agent:blocked\` off to put it back in the queue. <!-- factory:status -->"
+            claimed="$TICKET"
+            gh issue edit "$TICKET" --remove-label "agent:queued" || true
+            gh issue edit "$TICKET" --add-label "agent:in-progress"
+            dispatch=(-f task=build -f ticket="$TICKET" -f spec="$SPEC")
           fi
 
-      # ── THE CHAIN ── (see the note at the top of the file)
-      - name: Start the next ticket
-        if: always()
-        env:
-          # The App's token, like every other call in this file — so the run
-          # shows as the Factory's, not because this hop needs it.
-          # `workflow_dispatch` is the one event the built-in GITHUB_TOKEN
-          # *is* allowed to start (with `actions: write`); it is labels and
-          # pushes it cannot. The cost: this job's token carries Actions:
-          # write for this line.
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          REF: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          echo "Spec #${SPEC}: asking for the next ticket on ${REF}."
-          gh workflow run agent-implement-spec.yml \
-            --ref "$REF" \
-            --field "spec_issue=${SPEC}"
+          # Claimed but never handed on: nothing else would ever free it.
+          if ! gh workflow run agent-route.yml --ref "$ref" "${dispatch[@]}"; then
+            gh issue edit "$claimed" --remove-label "agent:in-progress" || true
+            echo "::error::Could not dispatch agent-route.yml for #${claimed}."
+            exit 1
+          fi
+          echo "Spec #${SPEC}: #${claimed} claimed and handed to the routing job (${MODE})."

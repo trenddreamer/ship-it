@@ -7,13 +7,14 @@ ticket out of a queue.
   the rest of it.
 
 - Tests ship in this ticket. End with more passing tests than you started
-  with.
+  with, and none failing.
+- The work is done when this repository's checks pass: `{{CHECK}}`. The
+  workflow runs them after you finish, and opens no pull request if they fail.
 - The review workflow checks you against the ticket's "Done when". Reread it
   before you stop.
-- Commit with `git commit` on the current branch. When the pre-commit hook
-  rejects a commit, fix the work and commit again. The hook stays as it is:
-  no `--no-verify`, no edits to `.husky/`, `scripts/pre-commit.sh` or
-  `core.hooksPath`.
+- Commit with `git commit` on the current branch. When a pre-commit hook
+  rejects a commit, fix the work and commit again. The hooks stay as they
+  are: no `--no-verify`, no edits to the hook scripts or `core.hooksPath`.
 - Finish with at least one commit and a clean working tree; without one, the
   ticket is parked for a person. The workflow pushes and opens the pull
   request.

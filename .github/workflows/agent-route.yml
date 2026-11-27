@@ -52,7 +52,20 @@ name: Agent — Route The Tickets
 #   `task=review`, `ticket=<n>` and `pr=<n>` if it was given. The review runs
 #   in the Enrolled repo, factory-review.yml.
 #
-#   #48 adds the spec queue here the same way.
+# THE SPEC QUEUE
+#   The spec queue's survey, agent-implement-spec.yml, dispatches this
+#   workflow, never a label:
+#
+#     decompose   `ticket` is the spec. Decompose runs in its Enrolled repo
+#                 and writes the queue's tickets into the Home repo.
+#     build       `ticket` is the frontier ticket, `spec` its spec.
+#
+#   The survey has claimed the spec or ticket (`agent:in-progress`) before
+#   it dispatches this, so the cron never hands it out twice. The same jobs
+#   run: route it, and start factory.yml in its Enrolled repo with
+#   `task=decompose` or `task=build`. A refused or undispatched one loses
+#   `agent:in-progress` and is parked (`agent:blocked`), which the queue
+#   skips; taking `agent:blocked` off puts it back.
 #
 # TOKENS
 #   Two Factory App tokens (ADR-0004), each minted in its job's first step,
@@ -85,7 +98,8 @@ name: Agent — Route The Tickets
 on:
   issues:
     types: [labeled]
-  # How a Factory run chains review: implement's token has Actions: write to
+  # How a Factory run chains review, and how the spec queue starts its work:
+  # implement's, build's and the survey's tokens have Actions: write to
   # dispatch this, and nothing in the Enrolled repo has to start it. Anyone
   # with write access to the Home repo can dispatch it too.
   workflow_dispatch:
@@ -93,19 +107,23 @@ on:
       task:
         description: The Factory's task.
         type: choice
-        options: [review]
+        options: [review, decompose, build]
         required: true
       ticket:
-        description: The Ticket's number.
+        description: The Ticket's number. For decompose, the spec's.
         type: string
         required: true
       pr:
-        description: The pull request's number in the Ticket's Enrolled repo. Empty to find it from the Ticket.
+        description: For review, the pull request's number in the Ticket's Enrolled repo. Empty to find it from the Ticket.
+        type: string
+        required: false
+      spec:
+        description: For decompose and build, the spec's number.
         type: string
         required: false
 
-# One explore routing run at a time, and one implement and one review routing
-# run per Ticket, never cancelled. A label that lands mid-run queues one more run
+# One explore routing run at a time, and one routing run per task and Ticket
+# for the rest, never cancelled. A label that lands mid-run queues one more run
 # behind this one, which lists the Tickets again when it starts. The Tickets
 # this run took are `agent:in-progress` by then, so nothing is taken twice
 # and nothing is lost. GitHub keeps one queued run per group, and bumps an
@@ -121,7 +139,7 @@ concurrency:
     ${{ github.event.label.name == 'agent:explore' && 'agent-route-explore'
     || github.event.label.name == 'agent:implement' && format('agent-route-implement-{0}', github.event.issue.number)
     || github.event.label.name == 'agent:review' && format('agent-route-review-{0}', github.event.issue.number)
-    || inputs.task == 'review' && format('agent-route-review-{0}', inputs.ticket)
+    || github.event_name == 'workflow_dispatch' && format('agent-route-{0}-{1}', inputs.task, inputs.ticket)
     || format('ignore-{0}', github.run_id) }}
   cancel-in-progress: false
 
@@ -185,8 +203,9 @@ jobs:
             numbers="$(gh issue list --state open --label "agent:explore" --limit 100 \
               --json number --jq '[.[].number] | sort')"
           elif [ "$DISPATCHED" = "true" ]; then
-            # A chained review: the Ticket that was named, if it is still
-            # open. A dispatched Ticket carries no trigger label.
+            # A chained review, or the spec queue's decompose or build: the
+            # Ticket that was named, if it is still open. A dispatched Ticket
+            # carries no trigger label.
             if ! [[ "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
               echo "::error::The ticket input must be a number."
               exit 1
@@ -214,6 +233,9 @@ jobs:
         with:
           tickets: ${{ steps.open.outputs.numbers }}
           trigger: ${{ github.event.label.name || format('agent:{0}', inputs.task) }}
+          # The spec queue's survey claimed the Ticket and skips it while it
+          # is parked; re-adding a label means nothing to it.
+          retry: ${{ (inputs.task == 'decompose' || inputs.task == 'build') && 'Then take `agent:blocked` off to put it back in the queue.' || '' }}
           token: ${{ steps.app.outputs.token }}
 
       - name: Batch the Tickets by Enrolled repo
@@ -259,6 +281,13 @@ jobs:
         || 'review' }}
       # Review only, and only when chained: the pull request to review.
       PR: ${{ inputs.pr }}
+      # Decompose and build: the spec.
+      SPEC: ${{ inputs.spec }}
+      # How to retry if the run can't be started.
+      RETRY: >-
+        ${{ (inputs.task == 'decompose' || inputs.task == 'build')
+        && 'Take `agent:blocked` off to put it back in the queue.'
+        || format('Re-add `{0}` to retry.', github.event.label.name || format('agent:{0}', inputs.task)) }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
@@ -317,6 +346,17 @@ jobs:
               fi
               gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
                 -f task=review -f ticket="$(jq -r '.[0]' <<< "$TICKETS")" "${pr[@]}" ;;
+            # The spec queue: the spec, and for build the ticket too.
+            decompose | build)
+              if ! [[ "$SPEC" =~ ^[0-9]+$ ]]; then
+                echo "::error::The spec input must be a number."
+                exit 1
+              fi
+              ticket=()
+              if [ "$TASK" = "build" ]; then ticket=(-f ticket="$(jq -r '.[0]' <<< "$TICKETS")"); fi
+              gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
+                -f task="$TASK" -f spec="$SPEC" "${ticket[@]}" ;;
+            *) echo "::error::Unknown task: $TASK"; exit 1 ;;
           esac
           echo "The $TASK run for $TICKETS started in $ENROLLED_REPO."
 
@@ -330,5 +370,5 @@ jobs:
             gh issue edit "$n" --remove-label "agent:in-progress" || true
             gh issue edit "$n" --add-label "agent:blocked" || true
             gh issue comment "$n" --body \
-              "The ${TASK} run could not be started in \`${ENROLLED_REPO}\` — [logs](${RUN_URL}). Re-add \`${TRIGGER}\` to retry. <!-- factory:status -->"
+              "The ${TASK} run could not be started in \`${ENROLLED_REPO}\` — [logs](${RUN_URL}). ${RETRY} <!-- factory:status -->"
           done

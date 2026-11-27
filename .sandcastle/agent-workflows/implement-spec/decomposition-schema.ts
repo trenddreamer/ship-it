@@ -1,8 +1,8 @@
 import { z } from "zod/v4";
 
 // The first loop's answer: one spec turned into an ordered queue of tickets.
-// agent-implement-spec.yml creates one GitHub issue per entry, in `position`
-// order, and the chain then works through them one at a time.
+// factory-implement-spec.yml creates one Ticket in the Home repo per entry, in
+// `position` order, and the chain then works through them one at a time.
 export const specDecompositionSchema = z
   .strictObject({
     tickets: z

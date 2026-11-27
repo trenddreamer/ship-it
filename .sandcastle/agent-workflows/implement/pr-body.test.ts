@@ -32,4 +32,16 @@ describe("prBody", () => {
       /^Built by the Factory's implementer\.\n\n---\n\nCloses trenddreamer\/ship-it#46\./,
     );
   });
+
+  it("names the spec a queued ticket is part of, in the same cross-repo form", () => {
+    expect(prBody("Adds a button.\n", { ...footing, spec: 41 })).toContain(
+      "Closes trenddreamer/ship-it#46. Part of trenddreamer/ship-it#41. Built unattended by [this run](" +
+        RUN +
+        ").",
+    );
+  });
+
+  it("names no spec for a Ticket built on its own", () => {
+    expect(prBody("Adds a button.\n", footing)).not.toContain("Part of");
+  });
 });

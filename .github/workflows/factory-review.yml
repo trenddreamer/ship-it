@@ -15,7 +15,7 @@ name: Factory — Review A Pull Request
 #
 #     chained   implement, once it opens a pull request, dispatches the
 #               routing job with the Ticket and that pull request. So does
-#               the spec queue's build (agent-implement-spec.yml).
+#               the spec queue's build (factory-implement-spec.yml).
 #     by hand   the Owner puts `agent:review` on the Ticket, to review its
 #               pull request again, or when the chain's hand-off failed. The
 #               routing job doesn't know the pull request then, so this
