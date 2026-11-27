@@ -24,7 +24,12 @@ export const batches = (routes: RoutedTicket[]): Batch[] => {
   }
 
   return [...byRepo].map(([repo, tickets]) => {
-    const [owner = "", name = ""] = repo.split("/");
-    return { repo, tickets: tickets.toSorted((a, b) => a - b), owner, name };
+    const slash = repo.indexOf("/");
+    return {
+      repo,
+      tickets: tickets.toSorted((a, b) => a - b),
+      owner: repo.slice(0, slash),
+      name: repo.slice(slash + 1),
+    };
   });
 };
