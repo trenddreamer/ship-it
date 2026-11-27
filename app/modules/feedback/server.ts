@@ -1,8 +1,9 @@
 // Entry point (server only): Feedback. A signed-in Account gives Feedback in
 // their own words; it goes to the Factory as a public issue through a
 // Tracker, and the Marketplace records only who gave it and when. There are
-// two Trackers: `githubTracker` opens a real GitHub issue, and
-// `loggingTracker` only writes it to the server console. `feedbackFormSchema`
+// two Trackers: `githubTracker` opens a real GitHub issue as the Feedback
+// App, and `loggingTracker` only writes it to the server console.
+// `feedbackTracker` picks one from configuration. `feedbackFormSchema`
 // parses the Feedback form before it reaches `giveFeedback`.
 // `currentCommit` and `commitLine` work out which commit the Marketplace is
 // running, for the footer's `Commit:` line: `currentCommit` gathers the
@@ -11,4 +12,5 @@ export { giveFeedback, type FeedbackResult, type GiveFeedback } from "./lib/give
 export { feedbackFormSchema } from "./lib/feedback-form-schema";
 export { loggingTracker, type Tracker, type TrackerIssue } from "./lib/tracker";
 export { githubTracker, type GitHubTrackerOptions } from "./lib/github-tracker";
+export { feedbackTracker, type FeedbackTrackerSettings } from "./lib/feedback-tracker";
 export { commitLine, currentCommit, type CommitInputs } from "./lib/commit";
