@@ -24,12 +24,13 @@ name: Agent — Explore The Tickets
 #     explore   runs the agent. The agent holds no GitHub token at all.
 #     apply     runs no agent. It checks the plan, and only then writes.
 #
-#   Read where FACTORY_PAT goes before you read anything else. It is the
-#   enforcement, not the description. The prompt asks the agent to stay
-#   read-only. In the explore job the PAT goes to one step, the one that
-#   lists the batch, and that step runs before the agent exists and runs
-#   nothing but `gh` and `jq`. The job's own GITHUB_TOKEN can read the code
-#   and nothing else. So the agent has nothing to write with.
+#   Read where the Factory App's token goes before you read anything else. It
+#   is the enforcement, not the description. The prompt asks the agent to
+#   stay read-only. In the explore job the token goes to one step, the one
+#   that lists the batch, and that step runs before the agent exists and runs
+#   nothing but `gh` and `jq`. The token can touch issues and nothing else.
+#   The job's own GITHUB_TOKEN can read the code and nothing else. So the
+#   agent has nothing to write with.
 #
 # WHY EXPLORE BEFORE YOU COMMIT
 #   A ticket that looks like twenty minutes and is actually a schema change
@@ -68,15 +69,21 @@ name: Agent — Explore The Tickets
 #
 # WHAT IT NEEDS
 #   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token.
-#   secrets.FACTORY_PAT — a fine-grained personal access token on this
-#     repository. Every call this workflow makes to GitHub uses it: listing
-#     the batch, posting the findings, moving the labels, closing duplicates.
-#     One hop is why it exists at all. A label applied with the built-in
-#     GITHUB_TOKEN does NOT start another workflow. GitHub suppresses that on
-#     purpose, so a workflow cannot trigger itself into a loop. The chain from
-#     explore to implement is exactly the loop we do want, so `agent:implement`
-#     has to go on with a token that is not the built-in one — and once that
-#     token is in the room, the factory uses it for everything.
+#   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory
+#     App (ADR-0004). Each job's first step mints a token from them with
+#     actions/create-github-app-token, and only that step sees the key. The
+#     token is new for each job, covers this repository only, carries
+#     Issues: read/write and nothing else, and is revoked when the job ends.
+#     Every call this workflow makes to GitHub uses it: listing the batch,
+#     posting the findings, moving the labels, closing duplicates. So the
+#     findings and labels show as the Factory's bot, `<slug>[bot]`, not as
+#     the Owner.
+#     One hop is why a token other than the built-in one is needed at all. A
+#     label applied with the built-in GITHUB_TOKEN does NOT start another
+#     workflow. GitHub suppresses that on purpose, so a workflow cannot
+#     trigger itself into a loop. The chain from explore to implement is
+#     exactly the loop we do want, so `agent:implement` has to go on with a
+#     token that is not the built-in one. An App's token does start it.
 #   secrets.GITHUB_TOKEN — supplied by Actions, and used only to check the
 #     code out. Scoped per job below.
 #   The `agent:explore` label. A fresh clone of this repository does not have
@@ -104,7 +111,7 @@ jobs:
     timeout-minutes: 45
 
     permissions:
-      contents: read # the checkout. The tickets are read with FACTORY_PAT.
+      contents: read # the checkout. The tickets are read with the App's token.
 
     # The batch it was given, and the plan it came back with. The apply job
     # reads both.
@@ -116,6 +123,17 @@ jobs:
       GH_REPO: ${{ github.repository }}
 
     steps:
+      - name: Mint the Factory App's token
+        # First, before anything else runs, and the only step that sees the
+        # private key. The token covers this repository (the default when
+        # `owner` and `repositories` are unset) with Issues: read/write only.
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-issues: write
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -124,8 +142,8 @@ jobs:
       - name: List the batch
         id: batch
         env:
-          # The PAT, before the agent exists. Nothing after this step gets it.
-          GH_TOKEN: ${{ secrets.FACTORY_PAT }}
+          # The token, before the agent exists. Nothing after this step gets it.
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           # Labels often go on several at once. Let them all land.
@@ -133,19 +151,19 @@ jobs:
 
           # Titles and bodies are written by whoever opened the issue, so they
           # go straight into a file. They never pass through the shell or an
-          # Actions expression. The agent reads the file. A comment goes in
-          # only when the person who wrote it has write access to this repo,
-          # and is not one of the factory's own status lines (they carry a
-          # hidden `<!-- factory:status -->`).
-          mkdir -p /tmp/explore
+          # Actions expression. The agent reads the file. The comments come
+          # from the REST API, which says which are a bot's, and are filtered
+          # once Node is installed (see "Keep the comments that may steer").
+          mkdir -p /tmp/explore/comments
           gh issue list --state open --label "agent:explore" --limit 100 \
-            --json number,title,body,createdAt,comments \
-            | jq 'map(.comments |= map(select(
-                (.authorAssociation | IN("OWNER", "MEMBER", "COLLABORATOR"))
-                and (.body | contains("<!-- factory:status -->") | not))))' \
-            > /tmp/explore/issues.json
+            --json number,title,body,createdAt \
+            > /tmp/explore/batch.json
 
-          numbers="$(jq -c '[.[].number] | sort' /tmp/explore/issues.json)"
+          numbers="$(jq -c '[.[].number] | sort' /tmp/explore/batch.json)"
+          for n in $(jq -r '.[]' <<< "$numbers"); do
+            gh api --paginate "repos/$GH_REPO/issues/$n/comments" --jq '.[]' \
+              | jq -s . > "/tmp/explore/comments/$n.json"
+          done
           echo "Batch: $numbers"
           echo "numbers=$numbers" >> "$GITHUB_OUTPUT"
 
@@ -201,6 +219,33 @@ jobs:
           npm install -g agent-browser@0.27.0
           agent-browser install
 
+      - name: Keep the comments that may steer the agent
+        # A comment goes in only when its author has write access to this
+        # repo, or it is the Factory's own bot, and it is not one of the
+        # Factory's status lines. Every other bot, the Feedback App's above
+        # all, is left out. The rule and its tests are in
+        # .sandcastle/agent-workflows/shared/steering-comments.ts.
+        if: steps.batch.outputs.numbers != '[]'
+        env:
+          FACTORY_BOT: ${{ steps.app.outputs.app-slug }}[bot]
+        run: |
+          set -euo pipefail
+          echo '{}' > /tmp/explore/kept.json
+          for f in /tmp/explore/comments/*.json; do
+            n="$(basename "$f" .json)"
+            npx tsx .sandcastle/agent-workflows/shared/keep-steering-comments.ts "$FACTORY_BOT" \
+              < "$f" > /tmp/explore/kept-one.json
+            jq --arg n "$n" --slurpfile c /tmp/explore/kept-one.json '.[$n] = $c[0]' \
+              /tmp/explore/kept.json > /tmp/explore/kept-next.json
+            mv /tmp/explore/kept-next.json /tmp/explore/kept.json
+          done
+          jq --slurpfile kept /tmp/explore/kept.json \
+            'map(.comments = $kept[0][.number | tostring])' \
+            /tmp/explore/batch.json > /tmp/explore/issues.json
+          # The agent reads issues.json and nothing else in here.
+          rm -r /tmp/explore/comments /tmp/explore/kept.json /tmp/explore/kept-one.json \
+            /tmp/explore/batch.json
+
       - name: Explore
         if: steps.batch.outputs.numbers != '[]'
         env:
@@ -235,18 +280,27 @@ jobs:
     timeout-minutes: 10
 
     # No checkout and no agent, so the GITHUB_TOKEN gets nothing. This job
-    # writes with FACTORY_PAT, and it is the only job that can.
+    # writes with a Factory App token of its own, and it is the only job that
+    # can. The explore job's token was revoked when that job ended.
     permissions: {}
 
     env:
-      # On the job, which is fine here: nothing in it runs code from the repo
-      # or from an agent. It reads the plan as data.
-      GH_TOKEN: ${{ secrets.FACTORY_PAT }}
       GH_REPO: ${{ github.repository }}
       BATCH: ${{ needs.explore.outputs.batch }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
+      - name: Mint the Factory App's token
+        # Issues: read/write covers every write below: comments, labels and
+        # closing duplicates. Nothing in this job runs code from the repo or
+        # from an agent; it reads the plan as data.
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-issues: write
+
       - name: Take the screenshots from the explore job
         if: needs.explore.result == 'success'
         # A pattern, not a name, so a run with no screenshots finds nothing
@@ -302,13 +356,16 @@ jobs:
 
       - name: Apply the plan
         if: needs.explore.result == 'success'
-        # Every label below goes on with FACTORY_PAT, and that matters for
-        # `agent:implement`: a label applied by the built-in token does not
-        # fire `issues: labeled`, so agent-implement.yml would never wake up
-        # and the chain would end here, silently, with a green tick.
+        # Every label below goes on with the App's token, and that matters
+        # for `agent:implement`: a label applied by the built-in token does
+        # not fire `issues: labeled`, so agent-implement.yml would never wake
+        # up and the chain would end here, silently, with a green tick.
         #
         # The findings comments are NOT tagged `<!-- factory:status -->`.
-        # They are the one thing the implementer most needs to read.
+        # They are the one thing the implementer most needs to read, and it
+        # keeps them because the Factory's bot posted them.
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           # A fresh clone of this repository does not have these labels yet.
@@ -361,6 +418,8 @@ jobs:
       - name: Mark blocked on failure
         # A step above failed, or the explore job did.
         if: failure() || needs.explore.result == 'failure'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           # Only the issues apply did not get to. One it did is already moved on.
           for n in $(jq -r '.[]' <<< "$BATCH"); do
@@ -373,6 +432,8 @@ jobs:
 
       - name: Always remove in-progress
         if: always()
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           for n in $(jq -r '.[]' <<< "$BATCH"); do
             gh issue edit "$n" --remove-label "agent:in-progress" || true
