@@ -62,8 +62,9 @@ name: Factory — Explore The Tickets
 #   branches on it:
 #
 #     easy-call       →  swap `agent:in-progress` for `agent:implement`,
-#                        which is the trigger for agent-implement.yml. The
-#                        factory keeps going without being asked.
+#                        which the Home repo's routing job routes and
+#                        dispatches to factory-implement.yml in this repo.
+#                        The factory keeps going without being asked.
 #     anything else   →  swap it for `needs-a-human` and stop. Somebody has
 #                        to come and look.
 #     a duplicate     →  closed, whatever its tag.
@@ -432,8 +433,9 @@ jobs:
         if: needs.explore.result == 'success' && needs.explore.outputs.batch != '[]'
         # Every label below goes on with the App's token, and that matters
         # for `agent:implement`: a label applied by the built-in token does
-        # not fire `issues: labeled`, so agent-implement.yml would never wake
-        # up and the chain would end here, silently, with a green tick.
+        # not fire `issues: labeled`, so the routing job, agent-route.yml,
+        # would never dispatch implement and the chain would end here,
+        # silently, with a green tick.
         #
         # The findings comments are NOT tagged `<!-- factory:status -->`.
         # They are the one thing the implementer most needs to read, and it
