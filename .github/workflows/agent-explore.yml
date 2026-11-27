@@ -26,9 +26,10 @@ name: Agent — Explore The Tickets
 #
 #   Read where the Factory App's token goes before you read anything else. It
 #   is the enforcement, not the description. The prompt asks the agent to
-#   stay read-only. In the explore job the token goes to one step, the one
-#   that lists the batch, and that step runs before the agent exists and runs
-#   nothing but `gh` and `jq`. The token can touch issues and nothing else.
+#   stay read-only. In the explore job the token goes to the three steps
+#   that list, route and claim the batch. They run before the agent exists,
+#   and run nothing but `gh`, `jq`, `yq` and the routing script from the
+#   checkout. The token can touch issues and nothing else.
 #   The job's own GITHUB_TOKEN can read the code and nothing else. So the
 #   agent has nothing to write with.
 #
@@ -55,8 +56,16 @@ name: Agent — Explore The Tickets
 #   workflow does not recognise is refused whole: nothing is written, the run
 #   goes red, and every issue in the batch is marked `agent:blocked`.
 #
+# ROUTED FIRST
+#   Every open `agent:explore` issue is routed through the Registry,
+#   repos.yml, before it joins the batch (ADR-0002). One with no `repo:`
+#   label, more than one, or one the Registry doesn't list is refused: it gets
+#   one comment with the reason, loses `agent:explore`, and is marked
+#   `agent:blocked`. The rest are the batch. See
+#   .github/actions/route-tickets/action.yml.
+#
 # THE LABELS WHILE IT RUNS
-#   When the batch is listed, each issue swaps `agent:explore` for
+#   When the batch is claimed, each issue swaps `agent:explore` for
 #   `agent:in-progress`. Apply swaps `agent:in-progress` for the issue's next
 #   label. If the run fails, the apply job's last steps mark every issue
 #   still in progress `agent:blocked`; re-add `agent:explore` to retry. They
@@ -139,25 +148,49 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: List the batch
-        id: batch
+      - name: List the open Tickets
+        id: open
         env:
-          # The token, before the agent exists. Nothing after this step gets it.
+          # The token, before the agent exists. Nothing after the batch is
+          # claimed gets it.
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
           # Labels often go on several at once. Let them all land.
           sleep 5
+          echo "numbers=$(gh issue list --state open --label "agent:explore" --limit 100 \
+            --json number --jq '[.[].number] | sort' )" >> "$GITHUB_OUTPUT"
 
+      - name: Route the Tickets
+        # Through the Registry, repos.yml. A Ticket it refuses gets the reason
+        # on it, loses `agent:explore` and is marked `agent:blocked`; it is not
+        # in the batch. The rest carry on.
+        id: route
+        if: steps.open.outputs.numbers != '[]'
+        uses: ./.github/actions/route-tickets
+        with:
+          tickets: ${{ steps.open.outputs.numbers }}
+          trigger: agent:explore
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Claim the batch
+        id: batch
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          ROUTED: ${{ steps.route.outputs.routed || '[]' }}
+        run: |
+          set -euo pipefail
           # Titles and bodies are written by whoever opened the issue, so they
           # go straight into a file. They never pass through the shell or an
           # Actions expression. The agent reads the file. The comments come
           # from the REST API, which says which are a bot's, and are filtered
           # once Node is installed (see "Keep the comments that may steer").
+          # Exactly the Tickets routed above: one labelled since is left for
+          # the next run, which routes it first.
           mkdir -p /tmp/explore/comments
-          gh issue list --state open --label "agent:explore" --limit 100 \
-            --json number,title,body,createdAt \
-            > /tmp/explore/batch.json
+          for n in $(jq -r '.[]' <<< "$ROUTED"); do
+            gh issue view "$n" --json number,title,body,createdAt
+          done | jq -s 'sort_by(.number)' > /tmp/explore/batch.json
 
           numbers="$(jq -c '[.[].number] | sort' /tmp/explore/batch.json)"
           for n in $(jq -r '.[]' <<< "$numbers"); do

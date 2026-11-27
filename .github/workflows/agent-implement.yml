@@ -21,6 +21,11 @@ name: Agent — Implement A Ticket
 #   is there to reject the push and no run's work is lost. Two runs on one
 #   ticket means two pull requests; close the one you do not want.
 #
+#   First of all, the `route` job routes the ticket through the Registry,
+#   repos.yml (ADR-0002). A ticket with no `repo:` label, more than one, or
+#   one the Registry doesn't list is refused with the reason on it, and is
+#   not built. See .github/actions/route-tickets/action.yml.
+#
 #   The agent itself is a Sandcastle script:
 #   .sandcastle/agent-workflows/implement/implement.ts, with its prompt next
 #   to it in prompt.md.
@@ -30,10 +35,11 @@ name: Agent — Implement A Ticket
 #     agent or how it is billed, see
 #     .sandcastle/agent-workflows/shared/common.ts.
 #   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory
-#     App (ADR-0004). The job's first step mints a token from them with
+#     App (ADR-0004). Each job's first step mints a token from them with
 #     actions/create-github-app-token, and only that step sees the key. The
-#     token is new for this run, covers this repository only, and carries
-#     Contents, Pull requests and Issues: read/write, nothing more. It is
+#     route job's carries Issues: read/write. The implement job's is new for
+#     this run, covers this repository only, and carries Contents, Pull
+#     requests and Issues: read/write, nothing more. It is
 #     revoked when the job ends. Every step that talks to GitHub uses it:
 #     reading the ticket, pushing, opening the pull request, commenting. So
 #     the commits, the pull request and the comments are the Factory's bot's,
@@ -103,9 +109,50 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  implement:
+  # The Ticket is routed through the Registry, repos.yml, before anything
+  # else happens to it (ADR-0002). A refused one gets one comment with the
+  # reason, loses `agent:implement` and is marked `agent:blocked`, and the
+  # implement job never starts. A job of its own, and not steps, so that a
+  # refusal skips the whole build, its failure comment included.
+  route:
     # Every other label on every other issue stops here, for free.
     if: github.event.label.name == 'agent:implement'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    outputs:
+      routed: ${{ steps.route.outputs.routed }}
+
+    steps:
+      - name: Mint the Factory App's token
+        # Issues: read/write, to read the Ticket's labels and to refuse it.
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-issues: write
+
+      - name: Checkout the Registry and the routing script
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            repos.yml
+            .github/actions
+            .sandcastle/agent-workflows/route
+
+      - name: Route the Ticket
+        id: route
+        uses: ./.github/actions/route-tickets
+        with:
+          tickets: "[${{ github.event.issue.number }}]"
+          trigger: agent:implement
+          token: ${{ steps.app.outputs.token }}
+
+  implement:
+    needs: route
+    if: needs.route.outputs.routed != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 

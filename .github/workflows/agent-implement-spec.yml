@@ -84,7 +84,8 @@ name: Agent — Implement A Spec
 #                               mints its own. Each covers this repository
 #                               only, with only what that job does:
 #
-#                                 survey     Issues: read
+#                                 survey     Issues: read/write (to refuse
+#                                            a spec the Registry won't route)
 #                                 decompose  Issues: read/write, Actions:
 #                                            read/write (the chain)
 #                                 implement  Contents, Pull requests, Issues
@@ -177,9 +178,9 @@ concurrency:
 
 jobs:
   # ── survey ────────────────────────────────────────────────────────────────
-  # Reads the queue and decides what this run is. No agent, no checkout of
-  # consequence — just `gh` and `jq`, so it is cheap enough to run every
-  # fifteen minutes forever.
+  # Routes the spec, reads the queue and decides what this run is. No agent,
+  # and a checkout of three paths: `gh`, `jq` and the routing script, so it
+  # is cheap enough to run every fifteen minutes forever.
   survey:
     # Label runs are filtered here; cron and dispatch runs carry no label and
     # fall through.
@@ -190,9 +191,11 @@ jobs:
     timeout-minutes: 5
 
     outputs:
-      # 'decompose' | 'implement' | 'drained' | 'no-spec'
-      mode: ${{ steps.survey.outputs.mode }}
-      spec: ${{ steps.survey.outputs.spec }}
+      # 'decompose' | 'implement' | 'drained' | 'no-spec' | 'refused'.
+      # A spec the Registry refused is the one case with no mode from either
+      # step: the queue step is skipped.
+      mode: ${{ steps.survey.outputs.mode || steps.spec.outputs.mode || 'refused' }}
+      spec: ${{ steps.spec.outputs.spec }}
       ticket: ${{ steps.survey.outputs.ticket }}
       remaining: ${{ steps.survey.outputs.remaining }}
 
@@ -203,19 +206,19 @@ jobs:
 
     steps:
       - name: Mint the Factory App's token
-        # Survey only reads the queue, so its token can only read issues.
+        # Survey reads the queue, and it can refuse the spec: comment on it
+        # and label it. So Issues: read/write, and nothing else.
         id: app
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
-          permission-issues: read
+          permission-issues: write
 
-      - name: Find the spec and the frontier ticket
-        id: survey
+      - name: Find the spec
+        id: spec
         env:
-          # This job runs `gh` and `jq` and nothing else — no checkout, no
-          # agent.
+          # This job runs `gh`, `jq` and the routing script, and no agent.
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           set -euo pipefail
@@ -235,6 +238,40 @@ jobs:
           fi
           echo "spec=$spec" >> "$GITHUB_OUTPUT"
           echo "Working spec #$spec"
+
+      - name: Checkout the Registry and the routing script
+        if: steps.spec.outputs.spec != ''
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            repos.yml
+            .github/actions
+            .sandcastle/agent-workflows/route
+
+      - name: Route the spec
+        # Through the Registry, repos.yml (ADR-0002). A refused spec gets one
+        # comment with the reason, loses `agent:implement-spec` (so the next
+        # cron tick doesn't find it and refuse it again), and is marked
+        # `agent:blocked`. Nothing else runs. Its tickets take its `repo:`
+        # label when decompose writes them.
+        id: route
+        if: steps.spec.outputs.spec != ''
+        uses: ./.github/actions/route-tickets
+        with:
+          tickets: "[${{ steps.spec.outputs.spec }}]"
+          trigger: agent:implement-spec
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Find the frontier ticket
+        id: survey
+        if: steps.route.outputs.routed != '' && steps.route.outputs.routed != '[]'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SPEC: ${{ steps.spec.outputs.spec }}
+        run: |
+          set -euo pipefail
+          spec="$SPEC"
 
           # 2. Does a queue exist for it yet? Every ticket this workflow
           #    writes is labelled `spec:<number>`. No such issues, open or
@@ -415,6 +452,13 @@ jobs:
           gh label create "agent:queued" --color FEF2C0 \
             --description "Waiting for the implement-spec chain" || true
 
+          # Each ticket goes where its spec goes: survey routed the spec by
+          # its one `repo:` label, so the tickets carry the same one.
+          repo_label="$(gh issue view "$SPEC" --json labels \
+            --jq '[.labels[].name | select(startswith("repo:"))] | first // empty')"
+          repo=()
+          if [ -n "$repo_label" ]; then repo=(--label "$repo_label"); fi
+
           total=$(jq '.tickets | length' /tmp/queue.json)
           echo "Writing $total tickets for spec #${SPEC}."
 
@@ -452,6 +496,7 @@ jobs:
               --body-file /tmp/ticket-body.md \
               --label "spec:${SPEC}" \
               --label "agent:queued" \
+              "${repo[@]}" \
               "${attach[@]}"
           done
 
