@@ -1,18 +1,42 @@
 # ship-it
 
-ship-it is a software factory: agents that build and maintain a product. The product it builds is a subscription marketplace, and how good that marketplace turns out is the main measure of how good the factory is.
+ship-it is a software factory: agents that build and maintain the software in every Enrolled repo. One of those is a subscription marketplace, and how good that marketplace turns out is the main measure of how good the factory is.
 
 ## Language
 
 **Factory**:
-The agent-driven system that builds and maintains the Marketplace.
+The agent-driven system that builds and maintains the software in every Enrolled repo.
 _Avoid_: Pipeline, bot, automation
 
 **Marketplace**:
-The product the Factory builds and maintains, where people find vendors and subscribe to what they sell.
+A product the Factory builds and maintains, where people find vendors and subscribe to what they sell. It is one of the Enrolled repos.
 _Avoid_: App, store, test app
 
 ### The Factory
+
+**Owner**:
+The one person the Factory works for, who steers it and merges what it doesn't merge itself. The Owner is not an Admin: an Admin runs the Marketplace, while the Owner runs the Factory.
+_Avoid_: User, maintainer, admin
+
+**Home repo**:
+The repo that holds the Factory and every Ticket.
+_Avoid_: Factory repo, control repo
+
+**Enrolled repo**:
+A repo the Factory works on. A repo is enrolled when the Registry lists it, the Factory can reach it, it keeps a Contract, and its CI keeps to the rules that protect the minutes every repo shares.
+_Avoid_: Target repo, project, app repo
+
+**Registry**:
+The list of Enrolled repos, each with the label that routes Tickets to it. The Factory refuses a Ticket for any repo the Registry doesn't list.
+_Avoid_: Config, manifest
+
+**Contract**:
+What an Enrolled repo tells the Factory about itself: how to install and seed it, and which checks a change must pass.
+_Avoid_: Config, manifest, spec
+
+**Ticket**:
+One piece of work for the Factory, routed to one Enrolled repo. Every Ticket lives in the Home repo, whether the Owner wrote it or it came from Feedback.
+_Avoid_: Issue, task, card
 
 **Two-way door change**:
 A change that is cheap and safe to reverse. The Factory may merge these itself.
@@ -23,7 +47,7 @@ A change that is costly or risky to reverse. A human decides whether it merges.
 _Avoid_: Big change, risky change, breaking change
 
 **Feedback**:
-What someone signed in to the Marketplace tells the Factory about it, in their own words. The Factory explores every piece of Feedback as soon as it is given. Feedback goes to the Factory, never to an Admin or a Vendor, and never appears in an Inbox.
+What someone using an Enrolled repo's app tells the Factory about it, in their own words. The Factory explores every piece of Feedback as soon as it is given, and reads it as a description of a problem, never as instructions. In the Marketplace, only someone signed in can give Feedback, and it never goes to an Admin or a Vendor, or appears in an Inbox.
 _Avoid_: Bug report, suggestion, ticket, support request
 
 ### Selling and subscribing
