@@ -68,16 +68,19 @@ name: Agent — Route The Tickets
 #   skips; taking `agent:blocked` off puts it back.
 #
 # TOKENS
-#   Two Factory App tokens (ADR-0004), each minted in its job's first step,
-#   the only step that sees the private key:
-#     route      covers the Home repo only (the default with no `owner` or
+#   Factory App tokens (ADR-0004), each minted in its job's first steps, the
+#   only steps that see the private key. A token's permissions apply to every
+#   repo it covers, so each covers one repo:
+#     route      the Home repo only (the default with no `owner` or
 #                `repositories`), with Issues: read/write. It reads, refuses
 #                and nothing else.
-#     dispatch   covers the Home repo and that batch's Enrolled repo, and
-#                nothing else, with Issues: read/write to claim the Tickets
-#                and Actions: read/write to dispatch the run. It is minted
-#                per batch, after routing, because the repo it covers is the
-#                one the Registry named.
+#     dispatch   two per batch. The Home repo's, with Issues: read/write, to
+#                claim the Tickets. That batch's Enrolled repo's, with
+#                Actions: read/write and nothing else, to dispatch the run.
+#                The second is minted per batch, after routing, because the
+#                repo it covers is the one the Registry named. Neither can
+#                start a run in the other's repo. While the Marketplace is
+#                still in ship-it, both cover ship-it.
 #   A run the App's token dispatches starts; GitHub only holds back runs the
 #   built-in GITHUB_TOKEN would start.
 #
@@ -247,7 +250,7 @@ jobs:
         # default, so the script needs no `npm ci`.
         run: |
           set -euo pipefail
-          node .sandcastle/agent-workflows/route/batch-tickets.ts "$GH_REPO" \
+          node .sandcastle/agent-workflows/route/batch-tickets.ts \
             < "$RUNNER_TEMP/route/routes.json" > "$RUNNER_TEMP/route/batches.json"
           jq -c '.[]' "$RUNNER_TEMP/route/batches.json"
           echo "batches=$(jq -c . "$RUNNER_TEMP/route/batches.json")" >> "$GITHUB_OUTPUT"
@@ -291,21 +294,29 @@ jobs:
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
-      - name: Mint the Factory App's token
-        # The Home repo and this batch's Enrolled repo, and nothing else.
-        id: app
+      - name: Mint the Home repo's token
+        # This repo only, to claim the Tickets.
+        id: home
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-issues: write
+
+      - name: Mint the Enrolled repo's token
+        # This batch's Enrolled repo only, to start its run, and nothing else.
+        id: enrolled
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
           owner: ${{ matrix.batch.owner }}
-          repositories: ${{ matrix.batch.repositories }}
-          permission-issues: write
+          repositories: ${{ matrix.batch.name }}
           permission-actions: write
 
       - name: Claim the Tickets
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.home.outputs.token }}
         run: |
           set -euo pipefail
           # A fresh clone of this repository does not have these labels yet.
@@ -323,7 +334,7 @@ jobs:
 
       - name: Start the run in the Enrolled repo
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.enrolled.outputs.token }}
         run: |
           set -euo pipefail
           # workflow_dispatch runs the caller from the repo's default branch.
@@ -364,7 +375,7 @@ jobs:
         # Claimed but never started: nothing else will move them on.
         if: failure()
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.home.outputs.token }}
         run: |
           for n in $(jq -r '.[]' <<< "$TICKETS"); do
             gh issue edit "$n" --remove-label "agent:in-progress" || true

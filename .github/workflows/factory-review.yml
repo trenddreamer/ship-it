@@ -81,16 +81,22 @@ name: Factory — Review A Pull Request
 #     checks each of its fixes must pass.
 #   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token.
 #   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory
-#     App (ADR-0004). The job's first step mints a token from them, and only
-#     that step sees the key. The token is new for this run, covers the Home
-#     repo and this Enrolled repo and nothing else, and is revoked when the
-#     job ends. It pushes the review's commits, posts the verdict and inline
-#     comments, and labels and comments on the PR and the Ticket, so it
-#     carries Contents, Pull requests and Issues: read/write, and nothing
-#     else. Not Actions: a review run cannot start or dispatch any workflow,
-#     not even the routing job. Not Workflows: a fix that touches
+#     App (ADR-0004). The job's first step, .github/actions/factory-tokens,
+#     mints two tokens from them, and only its mint steps see the key. Both
+#     are new for this run and revoked when the job ends. A token's
+#     permissions apply to every repo it covers, so each covers one repo:
+#       home       the Home repo only. Issues: read/write (the Ticket's
+#                  labels and comments) and Contents: read (to clone the
+#                  agent scripts).
+#       enrolled   this Enrolled repo only. Contents and Pull requests:
+#                  read/write, to push the review's commits, post the verdict
+#                  and inline comments, and label the PR.
+#     While the Marketplace is still in ship-it, both cover ship-it. Once it
+#     moves out, nothing in this run can write the Home repo's code.
+#     Neither has Actions: a review run cannot start or dispatch any
+#     workflow, not even the routing job. Nor Workflows: a fix that touches
 #     `.github/workflows/` is refused at the push.
-#     Only the steps that call GitHub get the token; the agent's step does
+#     Only the steps that call GitHub get a token; the agent's step does
 #     not. Keeping it out of the agent's environment is tidiness, not a wall:
 #     the agent shares the machine with the steps that push and post. The
 #     real defence is who can reach the agent: a pull request from the
@@ -130,9 +136,8 @@ on:
       FACTORY_APP_PRIVATE_KEY:
         required: true
 
-env:
-  # Where the Ticket lives, and where the agent scripts come from.
-  HOME_REPO: trenddreamer/ship-it
+# HOME_REPO, where the Ticket lives and the agent scripts come from, is set
+# for the job by its first step, .github/actions/factory-tokens.
 
 jobs:
   review:
@@ -159,34 +164,20 @@ jobs:
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
-      - name: Mint the Factory App's token
-        # First, and the only step that sees the private key. The Home repo
-        # and this Enrolled repo (once, while they are the same repo), and
-        # only what a review uses. No `permission-actions`: a review never
-        # dispatches anything.
-        id: app
-        uses: actions/create-github-app-token@v2
+      - name: Mint the Factory App's tokens
+        # First, and the only step that sees the private key. Two tokens,
+        # each for one repo (see WHAT IT NEEDS), and no Actions on either: a
+        # review never dispatches anything. It also sets HOME_REPO and says
+        # who the Factory's bot is.
+        id: factory
+        uses: trenddreamer/ship-it/.github/actions/factory-tokens@main
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
-          owner: trenddreamer
-          repositories: ${{ github.event.repository.name == 'ship-it' && 'ship-it' || format('ship-it,{0}', github.event.repository.name) }}
-          permission-contents: write
-          permission-pull-requests: write
-          permission-issues: write
-
-      - name: Who the Factory is
-        # The App's bot account, so the review's commits are linked to it:
-        # `<slug>[bot]`, and the noreply address with the bot's user id.
-        id: bot
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          LOGIN: ${{ steps.app.outputs.app-slug }}[bot]
-        run: |
-          set -euo pipefail
-          id="$(gh api "/users/${LOGIN}" --jq .id)"
-          echo "login=${LOGIN}" >> "$GITHUB_OUTPUT"
-          echo "email=${id}+${LOGIN}@users.noreply.github.com" >> "$GITHUB_OUTPUT"
+          home-issues: write
+          home-contents: read
+          enrolled-contents: write
+          enrolled-pull-requests: write
 
       - name: Mark the Ticket in progress
         # The routing job claimed the Ticket before it dispatched this run.
@@ -194,33 +185,17 @@ jobs:
         # run that took the label off as it ended, finds it gone, so it goes
         # back on.
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
         run: gh issue edit "$TICKET" -R "$HOME_REPO" --add-label "agent:in-progress"
 
-      - name: Clone the agent scripts from the Home repo
-        # Into $RUNNER_TEMP/factory, outside the workspace, so the agent's
-        # `git status` never sees them. actions/checkout can't write outside
-        # the workspace, so this is a plain clone. The token goes in a
-        # one-off header, never into .git/config.
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-        run: |
-          set -euo pipefail
-          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
-            clone --depth 1 --branch main --filter=blob:none --sparse \
-            "https://github.com/${HOME_REPO}.git" "$RUNNER_TEMP/factory"
-          # The root files (package.json, the lockfile) come with the cone.
-          git -C "$RUNNER_TEMP/factory" \
-            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
-            sparse-checkout set .sandcastle
-
-      - name: Setup Node.js 22
-        # No npm cache: setup-node only hashes lockfiles inside the
-        # workspace, and the agent scripts' one is in the Home repo's clone.
-        uses: actions/setup-node@v4
+      - name: Set up the agent scripts from the Home repo
+        # Cloned into $RUNNER_TEMP/factory, outside the workspace, so the
+        # agent's `git status` never sees them, with Node 22 and their
+        # dependencies. See .github/actions/factory-scripts.
+        uses: trenddreamer/ship-it/.github/actions/factory-scripts@main
         with:
-          node-version: "22"
+          home-repo: ${{ steps.factory.outputs.home-repo }}
+          token: ${{ steps.factory.outputs.home-token }}
 
       - name: Find the pull request
         # The one the routing job named, or, when the Owner asked from the
@@ -228,7 +203,7 @@ jobs:
         # `node` runs the script: it needs nothing installed.
         id: pr
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           PR_INPUT: ${{ inputs.pr }}
         run: |
           set -euo pipefail
@@ -262,7 +237,7 @@ jobs:
 
       - name: Mark the pull request in progress
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           # A fresh Enrolled repo does not have these labels yet.
@@ -290,7 +265,7 @@ jobs:
         # 2. The standards: CODING_STANDARDS.md, in the checkout.
         # 3. The spec: this.
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
         run: |
           set -euo pipefail
           gh issue view "$TICKET" -R "$HOME_REPO" --json number,title,body \
@@ -298,41 +273,15 @@ jobs:
             > /tmp/review-spec.md
           cat /tmp/review-spec.md
 
-      - name: Install the agent scripts' dependencies
-        # Sandcastle, zod and tsx, from the Home repo's lockfile. HUSKY=0: no
-        # git hooks in a clone nobody commits to.
-        working-directory: ${{ runner.temp }}/factory
-        env:
-          HUSKY: "0"
-        run: npm ci
-
       - name: Install the Enrolled repo (the Contract's install)
         # Through env, never pasted into the script: the Contract is text.
         env:
           INSTALL: ${{ inputs.install }}
         run: bash -euo pipefail -c "$INSTALL"
 
-      - name: Install Claude Code
-        run: npm install -g @anthropic-ai/claude-code
-
-      - name: Install Matt Pocock's skills
-        # Not pinned on purpose: CI follows the latest plugin, like a local install.
-        run: |
-          claude plugin marketplace add anthropics/claude-plugins-official
-          claude plugin install mattpocock-skills@claude-plugins-official
-
-      - name: Cache agent-browser's Chrome
-        uses: actions/cache@v4
-        with:
-          path: ~/.agent-browser/browsers
-          key: agent-browser-0.27.0-${{ runner.os }}
-
-      - name: Install agent-browser
-        # The agent drives the app with it for screenshots and checks. Without
-        # it here, each run installs it mid-session.
-        run: |
-          npm install -g agent-browser@0.27.0
-          agent-browser install
+      - name: Install the agent's tools
+        # Claude Code, Matt Pocock's skills and agent-browser.
+        uses: trenddreamer/ship-it/.github/actions/agent-tools@main
 
       - name: Seed the Enrolled repo (the Contract's seed)
         # The pre-commit hook runs on every commit the agent makes, and the
@@ -343,8 +292,8 @@ jobs:
 
       - name: Open the branch
         env:
-          GIT_NAME: ${{ steps.bot.outputs.login }}
-          GIT_EMAIL: ${{ steps.bot.outputs.email }}
+          GIT_NAME: ${{ steps.factory.outputs.bot-login }}
+          GIT_EMAIL: ${{ steps.factory.outputs.bot-email }}
           BRANCH: ${{ steps.pr.outputs.branch }}
         run: |
           set -euo pipefail
@@ -376,7 +325,7 @@ jobs:
       - name: Push the review's fixes
         id: push
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           BRANCH: ${{ steps.pr.outputs.branch }}
           HEAD_SHA: ${{ steps.pr.outputs.sha }}
           # Where the fixes go if the push to BRANCH is rejected. New every run.
@@ -417,23 +366,24 @@ jobs:
         id: fallback
         if: steps.push.outputs.fallback == 'true'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           BRANCH: ${{ steps.pr.outputs.branch }}
           BASE_REF: ${{ steps.pr.outputs.base }}
           FALLBACK_BRANCH: ${{ steps.push.outputs.branch }}
         run: |
           set -euo pipefail
+          # It stands in for #PR_NUMBER, against the same base, so whichever
+          # of the two the Owner merges into the default branch must close
+          # the Ticket: into the default branch it carries the same
+          # cross-repo `Closes`. Into another branch GitHub ignores closing
+          # keywords, so the body says which pull request has to close it.
           # A bare `#n` here is a pull request in this, the Enrolled, repo.
-          # The Ticket is named in full, and not with a closing keyword: only
-          # one of the two PRs should close it.
-          {
-            echo "The review run on #${PR_NUMBER}, for ${HOME_REPO}#${TICKET}, committed fixes on top of \`${BRANCH}\`,"
-            echo "but \`${BRANCH}\` moved during the run and the push was rejected. These are those fixes,"
-            echo "so they are not lost. Keep this PR or #${PR_NUMBER}, and close the other."
-            echo ""
-            echo "Built unattended by [this run](${RUN_URL})."
-          } > /tmp/review-fallback.md
+          # The rule and its tests: .sandcastle/agent-workflows/review/fallback-body.ts.
+          default="$(gh repo view "$ENROLLED_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
+          node "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/review/write-fallback-body.ts" \
+            "$HOME_REPO" "$TICKET" "$PR_NUMBER" "$BRANCH" "$BASE_REF" "$default" "$RUN_URL" \
+            > /tmp/review-fallback.md
           url="$(gh pr create \
             -R "$ENROLLED_REPO" \
             --draft \
@@ -448,7 +398,7 @@ jobs:
         id: verdict
         if: always() && steps.pr.outputs.number != ''
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
           BRANCH: ${{ steps.pr.outputs.branch }}
           FALLBACK: ${{ steps.push.outputs.fallback }}
@@ -489,7 +439,7 @@ jobs:
         # the push was rejected. review.ts already dropped every comment
         # outside the diff, because GitHub rejects the whole review for one.
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           TARGET: ${{ steps.fallback.outputs.number || steps.pr.outputs.number }}
         run: |
           set -euo pipefail
@@ -520,7 +470,7 @@ jobs:
         # posted, pass or fail: the no-verdict note is not a review.
         if: steps.outcome.outputs.outcome == 'pass' || steps.outcome.outputs.outcome == 'changes-requested'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: gh pr ready "$PR_NUMBER" -R "$ENROLLED_REPO"
 
@@ -532,20 +482,23 @@ jobs:
           failure() || steps.push.outputs.fallback == 'true'
           || steps.outcome.outputs.outcome == 'changes-requested'
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          # The Ticket with the Home repo's token, the PR with this repo's.
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+          ENROLLED_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           gh label create "agent:blocked" -R "$HOME_REPO" --color B60205 \
             --description "An agent run failed here. Its comment says how to retry" || true
           gh issue edit "$TICKET" -R "$HOME_REPO" --add-label "agent:blocked" || true
-          [ -z "$PR_NUMBER" ] || gh pr edit "$PR_NUMBER" -R "$ENROLLED_REPO" --add-label "agent:blocked" || true
+          [ -z "$PR_NUMBER" ] || GH_TOKEN="$ENROLLED_TOKEN" \
+            gh pr edit "$PR_NUMBER" -R "$ENROLLED_REPO" --add-label "agent:blocked" || true
 
       - name: Report back on the Ticket
         # On the Ticket in the Home repo, with full links: a bare `#n` there
         # would point at the Home repo's own pull requests.
         if: always()
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
           JOB_STATUS: ${{ job.status }}
           OUTCOME: ${{ steps.outcome.outputs.outcome }}
           PR_URL: ${{ steps.pr.outputs.url }}
@@ -572,8 +525,10 @@ jobs:
       - name: Always remove in-progress
         if: always()
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+          ENROLLED_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           gh issue edit "$TICKET" -R "$HOME_REPO" --remove-label "agent:in-progress" || true
-          [ -z "$PR_NUMBER" ] || gh pr edit "$PR_NUMBER" -R "$ENROLLED_REPO" --remove-label "agent:in-progress" || true
+          [ -z "$PR_NUMBER" ] || GH_TOKEN="$ENROLLED_TOKEN" \
+            gh pr edit "$PR_NUMBER" -R "$ENROLLED_REPO" --remove-label "agent:in-progress" || true

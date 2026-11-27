@@ -1,0 +1,32 @@
+name: Install the agent's tools
+description: >-
+  Installs Claude Code, Matt Pocock's skills and agent-browser (with its
+  Chrome cached), which every Factory agent runs with.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Claude Code
+      shell: bash
+      run: npm install -g @anthropic-ai/claude-code
+
+    - name: Install Matt Pocock's skills
+      # Not pinned on purpose: CI follows the latest plugin, like a local install.
+      shell: bash
+      run: |
+        claude plugin marketplace add anthropics/claude-plugins-official
+        claude plugin install mattpocock-skills@claude-plugins-official
+
+    - name: Cache agent-browser's Chrome
+      uses: actions/cache@v4
+      with:
+        path: ~/.agent-browser/browsers
+        key: agent-browser-0.27.0-${{ runner.os }}
+
+    - name: Install agent-browser
+      # The agent drives the app with it for screenshots and checks. Without
+      # it here, each run installs it mid-session.
+      shell: bash
+      run: |
+        npm install -g agent-browser@0.27.0
+        agent-browser install

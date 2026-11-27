@@ -1,6 +1,6 @@
 import { createPublicKey, generateKeyPairSync, verify } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { giveFeedback, githubTracker } from "../server";
+import { feedbackTracker, giveFeedback } from "../server";
 import { addAccount, feedbackRows, freshDatabase } from "./fixtures";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {
@@ -42,7 +42,7 @@ function gitHub({ mint = minted, open = opened }: { mint?: Answer; open?: Answer
 async function send(fetch: typeof globalThis.fetch) {
   const database = await freshDatabase();
   const account = await addAccount(database, "someone@example.test", "customer");
-  const result = await giveFeedback(database, githubTracker({ ...app, repo, repoLabel, fetch }), {
+  const result = await giveFeedback(database, feedbackTracker({ ...app, repo, repoLabel, fetch }), {
     account,
     text: "The subscribe button does nothing.\nI clicked it twice.",
     page: "/products/12/subscribe",
@@ -144,7 +144,7 @@ describe("the GitHub tracker", () => {
     const fetch = gitHub();
     const database = await freshDatabase();
     const account = await addAccount(database, "someone@example.test", "customer");
-    const tracker = githubTracker({ ...app, repo, repoLabel, fetch });
+    const tracker = feedbackTracker({ ...app, repo, repoLabel, fetch });
     const input = { account, text: "Something is off here.", page: "/inbox", commit: "abc1234" };
 
     await giveFeedback(database, tracker, input);

@@ -22,6 +22,7 @@
     "db:seed": "tsx app/db/seed.ts",
     "db:reset": "tsx app/db/reset.ts && npm run db:migrate && npm run db:seed",
     "test:mutation": "stryker run",
+    "test:mutation:scripts": "stryker run stryker.scripts.config.mjs",
     "test:journey": "npm run build && tsx e2e/run.ts"
   },
   "devDependencies": {
