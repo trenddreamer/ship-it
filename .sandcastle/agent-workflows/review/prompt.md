@@ -5,10 +5,10 @@ Review it with the `code-review` skill:
 
 - fixed point: `origin/{{BASE_REF}}`
 - spec: /tmp/review-spec.md
-- standards: CODING_STANDARDS.md
+- standards: CODING_STANDARDS.md, if this repository has one
 
-A split that `scripts/check-file-tokens.sh` forced is in scope for any
-ticket: tell both axes so. Check moved code with
+A split that the repository's own file-size limit forced (a pre-commit hook,
+say) is in scope for any ticket: tell both axes so. Check moved code with
 `git diff --color-moved=plain --color-moved-ws=allow-indentation-change origin/{{BASE_REF}}...HEAD`,
 which shows any line that changed on the way.
 
@@ -16,11 +16,11 @@ which shows any line that changed on the way.
 
 The human reviewer gets **decisions** only: product behaviour the ticket
 leaves open, or a trade-off between two documented rules. Everything else you
-fix on `{{BRANCH}}`, however large: deepening a module, taking `db` as a
-parameter, writing the tests a module lacks, extracting a shared component,
-splitting a file instead of adding it to
-`scripts/token-limit-exempt.txt`. A fix is done when
-`npm run check` passes and the hook accepts its commit. Commit each fix on
+fix on `{{BRANCH}}`, however large: deepening a module, writing the tests a
+module lacks, extracting a shared component, splitting a file instead of
+exempting it from a limit. A fix is done when this repository's checks pass,
+`{{CHECK}}`, and its pre-commit hook, if it has one, accepts the commit.
+The hooks stay as they are: no `--no-verify`. Commit each fix on
 its own. The workflow pushes your commits. Leave `.github/` untouched.
 
 Every finding you leave becomes an inline comment on the first line it

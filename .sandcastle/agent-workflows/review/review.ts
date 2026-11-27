@@ -28,6 +28,7 @@ const result = await runWithExtraction({
     PR_NUMBER: required("PR_NUMBER"),
     BRANCH: required("BRANCH"),
     BASE_REF,
+    CHECK: required("CHECK"),
   },
   output: sandcastle.Output.object({ tag: "comments", schema: reviewSchema }),
   extractionPrompt: extractionPrompt("comments", reviewSchema),
@@ -51,7 +52,7 @@ for (const { path: file, line } of dropped) {
 // heading, so the workflow leaves the PR a draft.
 const verdict = fs.existsSync(VERDICT)
   ? fs.readFileSync(VERDICT, "utf8")
-  : "The review run produced no verdict. See the logs. Re-add `agent:review` to retry.\n";
+  : "The review run produced no verdict. See the logs. Add `agent:review` to its Ticket to retry.\n";
 fs.writeFileSync(VERDICT, addLeftFindings(verdict, posted, dropped));
 
 // The request body for POST /repos/{owner}/{repo}/pulls/{n}/reviews.

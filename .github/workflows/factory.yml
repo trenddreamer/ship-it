@@ -17,6 +17,8 @@ name: Factory
 #
 #     explore     `tickets`, a batch of Tickets routed to this repo.
 #     implement   `ticket`, the one Ticket to build.
+#     review      `ticket`, and `pr`, the pull request here to review. With
+#                 no `pr`, review finds the Ticket's open pull request.
 #
 # THE CONTRACT
 #   install   how to install the repo, from a fresh checkout.
@@ -34,14 +36,18 @@ on:
       task:
         description: The Factory's task.
         type: choice
-        options: [explore, implement]
+        options: [explore, implement, review]
         required: true
       tickets:
         description: For explore, the Tickets in the Home repo, as a JSON array, e.g. `[12, 13]`.
         type: string
         required: false
       ticket:
-        description: For implement, the Ticket's number in the Home repo.
+        description: For implement and review, the Ticket's number in the Home repo.
+        type: string
+        required: false
+      pr:
+        description: For review, the pull request's number in this repo. Empty to find it from the Ticket.
         type: string
         required: false
 
@@ -71,6 +77,22 @@ jobs:
       contents: read
     with:
       ticket: ${{ inputs.ticket }}
+      install: npm ci
+      seed: npm run db:migrate && npm run db:seed
+      check: npm run check
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+
+  review:
+    if: inputs.task == 'review'
+    uses: trenddreamer/ship-it/.github/workflows/factory-review.yml@main
+    permissions:
+      contents: read
+    with:
+      ticket: ${{ inputs.ticket }}
+      pr: ${{ inputs.pr }}
       install: npm ci
       seed: npm run db:migrate && npm run db:seed
       check: npm run check

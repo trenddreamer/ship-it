@@ -33,7 +33,7 @@ name: Agent — Implement A Spec
 #             │ queue has a frontier ticket           │
 #             ▼                                       │
 #        ┌───────────┐                                │
-#        │ implement │ ──► draft PR ──► agent:review  │
+#        │ implement │ ──► draft PR ──► review        │
 #        └─────┬─────┘                                │
 #              │                                      │
 #              ▼                                      ▼
@@ -106,13 +106,9 @@ name: Agent — Implement A Spec
 #                               Factory's own bot, and labels only a
 #                               collaborator or the Factory can apply.
 #
-#                               Why not the built-in GITHUB_TOKEN? Two hops
-#                               need another token. The draft PR: by default
-#                               the built-in GITHUB_TOKEN may not open one. The
-#                               `agent:review` label: one applied with the
-#                               built-in token lands, and starts no workflow,
-#                               so the reviewer would never wake. One the App
-#                               applies does. And the App's token makes the
+#                               Why not the built-in GITHUB_TOKEN? The draft
+#                               PR: by default the built-in GITHUB_TOKEN may
+#                               not open one. And the App's token makes the
 #                               Factory's commits, PRs and comments its bot's,
 #                               `<slug>[bot]`, so the Owner can approve them.
 #   secrets.GITHUB_TOKEN      — supplied by Actions, and used for the checkout
@@ -759,25 +755,24 @@ jobs:
           echo "shipped=true" >> "$GITHUB_OUTPUT"
 
       - name: Hand the pull request to the reviewer
+        # Through the routing job, agent-route.yml, with `task=review`, the
+        # ticket and the pull request, as implement does: it routes the
+        # ticket and starts the review in its Enrolled repo
+        # (factory-review.yml). No label on the pull request is involved.
         if: steps.ship.outputs.shipped == 'true'
         env:
-          # The other hop the built-in token cannot make, and the line the
-          # whole chain ends on. agent-review.yml triggers on `pull_request: [labeled]`, and
-          # a label applied with the built-in token does not fire a workflow —
-          # GitHub suppresses that so a workflow cannot trigger itself. With
-          # GITHUB_TOKEN the label lands, the run goes green, and the reviewer
-          # never wakes: the last link in the chain breaks and says nothing.
           GH_TOKEN: ${{ steps.app.outputs.token }}
           GH_REPO: ${{ github.repository }}
+          PR_URL: ${{ steps.ship.outputs.url }}
         run: |
           set -euo pipefail
-          gh label create "agent:review" --color 5319E7 \
-            --description "Ask the review workflow to read this pull request" || true
+          ref="$(gh api "repos/$GH_REPO" --jq .default_branch)"
 
           # No `|| true` and no `::warning` fallback here, on purpose. If this
           # fails the factory has stopped at its last hop, and a green tick over
           # a chain that ended is worse than a red one.
-          gh pr edit "$BRANCH" --add-label "agent:review"
+          gh workflow run agent-route.yml --ref "$ref" \
+            -f task=review -f ticket="$TICKET" -f pr="${PR_URL##*/}"
 
       - name: Close the ticket and move the queue on
         if: always()

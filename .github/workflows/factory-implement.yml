@@ -29,10 +29,12 @@ name: Factory — Implement A Ticket
 #   only honours that on a pull request into the default branch, which is
 #   where this one goes. See .sandcastle/agent-workflows/implement/pr-body.ts.
 #
-#   Then it hands that pull request to the reviewer: it adds `agent:review`,
-#   which starts agent-review.yml in the repo the pull request is in. The
-#   reviewer marks the PR ready once its verdict is posted. The merge stays a
-#   human's.
+#   Then it hands that pull request to the reviewer, through the Home repo:
+#   it dispatches the routing job, agent-route.yml, with `task=review`, the
+#   Ticket and the pull request, and the routing job starts
+#   factory-review.yml in this Enrolled repo. No label on the pull request,
+#   and no event in this repo, is involved. The reviewer marks the PR ready
+#   once its verdict is posted. The merge stays a human's.
 #
 #   Every run pushes to a branch of its own, `agent/issue-<n>-<run id>`. A
 #   retry never pushes onto the branch an earlier run left behind, so nothing
@@ -66,8 +68,11 @@ name: Factory — Implement A Ticket
 #     App (ADR-0004). The job's first step mints a token from them with
 #     actions/create-github-app-token, and only that step sees the key. The
 #     token is new for this run, covers the Home repo and this Enrolled repo
-#     and nothing else, carries Contents, Pull requests and Issues:
-#     read/write, nothing more, and is revoked when the job ends. Every step
+#     and nothing else, carries Contents, Pull requests, Issues and Actions:
+#     read/write, nothing more, and is revoked when the job ends. Actions is
+#     for one call, dispatching review through the Home repo's routing job;
+#     a token's permissions cover every repo in it, so it holds for this repo
+#     too. Every step
 #     that talks to GitHub uses it: reading the Ticket, pushing, opening the
 #     pull request, commenting. So the commits, the pull request and the
 #     comments are the Factory's bot's, `<slug>[bot]`, and the Owner can
@@ -75,8 +80,6 @@ name: Factory — Implement A Ticket
 #     Not Workflows: write, so a push that changes `.github/workflows/` is
 #     refused. The prompt leaves `.github/` alone, and a ticket that needs
 #     it is one for a person.
-#     A label applied with the built-in GITHUB_TOKEN starts no workflow, so
-#     `agent:review` goes on with the App's token, which does.
 #   secrets.GITHUB_TOKEN — supplied by Actions, and used only to check the
 #     Enrolled repo's code out. The caller's job sets its permissions.
 #
@@ -96,7 +99,8 @@ name: Factory — Implement A Ticket
 #   Factory's own get in, and the label is an approval only a collaborator
 #   (or the Factory, after explore) can give. Even a run steered by injected
 #   text holds a token for the Home repo and this repo alone, with no Actions
-#   or Workflows permission.
+#   permission beyond starting the Factory's own runs, and no Workflows
+#   permission.
 #
 # WHO COMMITS
 #   The agent does, and the repo's own pre-commit hook, if it has one, runs on
@@ -169,8 +173,8 @@ jobs:
         # First, and the only step that sees the private key. The Home repo
         # and this Enrolled repo (once, while they are the same repo), and
         # only what building a Ticket uses: cloning the agent scripts,
-        # pushing a branch, opening a pull request, and the Ticket's labels
-        # and comments.
+        # pushing a branch, opening a pull request, the Ticket's labels and
+        # comments, and dispatching review through the Home repo.
         id: app
         uses: actions/create-github-app-token@v2
         with:
@@ -181,6 +185,7 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
           permission-issues: write
+          permission-actions: write
 
       - name: Who the Factory is
         # The App's bot account, so its commits are linked to it on GitHub:
@@ -436,22 +441,23 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Hand the pull request to the reviewer
+        # Through the Home repo: its routing job routes the Ticket again and
+        # starts the review in this repo. Events here never reach it.
         id: handoff
         env:
-          # agent-review.yml triggers on `pull_request: [labeled]` in the
-          # Enrolled repo, and a label applied with the built-in token starts
-          # no workflow. A label the App applies does.
           GH_TOKEN: ${{ steps.app.outputs.token }}
           PR_URL: ${{ steps.pr.outputs.url }}
         run: |
           set -euo pipefail
-          gh label create "agent:review" -R "$ENROLLED_REPO" --color 5319E7 \
-            --description "Ask the review workflow to read this pull request" || true
+          # workflow_dispatch runs the workflow from the Home repo's default
+          # branch.
+          ref="$(gh api "repos/$HOME_REPO" --jq .default_branch)"
 
           # No `|| true` here, on purpose. If this fails, the chain has
           # stopped at its last hop, and a red run says so. A green run over
           # a chain that stopped says nothing.
-          gh pr edit "$PR_URL" --add-label "agent:review"
+          gh workflow run agent-route.yml -R "$HOME_REPO" --ref "$ref" \
+            -f task=review -f ticket="$TICKET" -f pr="${PR_URL##*/}"
 
       - name: Mark blocked on failure
         if: failure()
@@ -478,7 +484,7 @@ jobs:
             if [ -n "$PR_URL" ]; then
               # The pull request exists. Only the hand-off failed, so a new
               # implement run would build a second pull request.
-              retry=" The pull request was not handed to the reviewer. Add \`agent:review\` to it to have it reviewed."
+              retry=" The pull request was not handed to the reviewer. Add \`agent:review\` to this Ticket to have it reviewed."
             else
               retry=" Re-add \`agent:implement\` to this Ticket to retry."
             fi
