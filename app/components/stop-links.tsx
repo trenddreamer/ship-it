@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import type { DeliverySchedule } from "~/db/schema";
-import { deliveryScheduleLabel } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries/client";
 
 /**
  * Links to stop selling a Product, or one of its Delivery Schedules. Each

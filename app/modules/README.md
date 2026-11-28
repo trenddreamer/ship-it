@@ -6,7 +6,8 @@ Every folder under `app/modules/` is a **deep module**: a lot of behaviour behin
 app/modules/
   <name>/
     index.ts        ← an entry point (public). Import this from outside.
-    client.ts       ← another entry point. A module may expose several.
+    client.ts       ← the entry point for the browser: what components may import.
+    server.ts       ← another entry point. A module may expose several.
     lib/            ← implementation: hidden from outside, free to import each other.
     tests/          ← tests + fixtures, exercising the module through its entry points.
 ```
@@ -27,7 +28,13 @@ Start a new module by copying `example/`.
 
 **No cycles.** No dependency cycles anywhere.
 
+**Components import values only through `client.ts`.** A file under `app/components/` runs in the browser, so it imports a module's functions and constants from `~/modules/<name>/client`, never from `index.ts` or `server.ts`. Type-only imports (`import type`) may use any entry point, because TypeScript erases them. b7e92f9 shows why: a component imported from `~/modules/accounts`, whose `index.ts` brings in password hashing (`node:crypto`), and the Vendor pages stopped hydrating.
+
 Type-only imports (`import type`) are checked too. [CODING_STANDARDS.md](../../CODING_STANDARDS.md) covers the routes past these rules that the linter can't see.
+
+## Client entry points
+
+A `client.ts` exposes what the browser may use from a module: pure functions, constants and types. It must not import, directly or through anything it loads, a Node built-in (`node:crypto`, `node:fs`, …), the database (`~/db/database` or a driver such as `@libsql/client`), or the module's `index.ts` or `server.ts`. Re-export from `lib/` files that stay clear of those. Importing constants from `~/db/schema` is allowed for now: it loads Drizzle's table builders, which run in the browser. A module's `tests/client.test.ts` checks this for its `client.ts`.
 
 ## No barrel files
 
