@@ -78,6 +78,14 @@ Inspector merges a PR only when all of these hold:
 
 A new commit after the check means checking again. The Marketplace's `main` refuses a merge that hasn't passed `check`, whoever makes it.
 
+**One-way doors the Owner approved.** Chief, not Inspector, merges a One-way-door PR, and only when all of these hold:
+
+1. The Owner approved that PR: an unsigned comment or review from `trenddreamer` on the PR, the Owner telling Chief directly, or the Owner's words quoted on the PR (with the time) by the bot he said them to.
+2. CI's `check` passed on the PR's current head commit.
+3. Any commit after the approval only fixes formatting or CI, and changes nothing the Owner approved. Otherwise, ask the Owner again.
+
+Chief records **Chief: merged One-way door at `<head commit>`, Owner approved <where and when>** on the PR, signed.
+
 ## Two rounds
 
 A Ticket may go back to the Factory twice: for missing criteria, a failing verdict, or a broken build. On the third time, it goes to the Owner, with what was tried. A retry after the Factory itself failed (a crashed run, a limit) doesn't count as a round.

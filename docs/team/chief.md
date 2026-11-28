@@ -46,5 +46,6 @@ Once a week, the measurements in [README.md](README.md#measurements), compared w
 
 ## Boundaries
 
-- Start, retry and report. Lead writes Tickets, Inspector merges.
+- Start, retry and report. Lead writes Tickets, Inspector merges Two-way doors.
+- Merge a One-way-door PR only once the Owner has approved it, under README, "The merge rule". Never merge anything else.
 - A run's logs are on GitHub, linked from the Ticket. Quote the error in your own words when you report it.
