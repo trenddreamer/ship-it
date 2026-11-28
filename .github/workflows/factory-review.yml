@@ -7,8 +7,8 @@ name: Factory — Review A Pull Request
 # WHAT STARTS IT
 #   Nothing starts it on its own, and no event in the Enrolled repo can: no
 #   label on the pull request, no push. An Enrolled repo's caller workflow
-#   calls it (for the Marketplace, still in ship-it:
-#   .github/workflows/factory.yml), and the Home repo's routing job,
+#   calls it (its .github/workflows/factory.yml), and the Home repo's
+#   routing job,
 #   .github/workflows/agent-route.yml, dispatches that caller with
 #   `task=review`, the Ticket, and the pull request if it knows it. The
 #   routing job is started two ways, both in the Home repo:
@@ -91,8 +91,8 @@ name: Factory — Review A Pull Request
 #       enrolled   this Enrolled repo only. Contents and Pull requests:
 #                  read/write, to push the review's commits, post the verdict
 #                  and inline comments, and label the PR.
-#     While the Marketplace is still in ship-it, both cover ship-it. Once it
-#     moves out, nothing in this run can write the Home repo's code.
+#     The Home repo is never an Enrolled repo, so nothing in this run can
+#     write the Home repo's code.
 #     Neither has Actions: a review run cannot start or dispatch any
 #     workflow, not even the routing job. Nor Workflows: a fix that touches
 #     `.github/workflows/` is refused at the push.

@@ -21,8 +21,8 @@ name: Factory — Implement A Spec
 #   Nothing in the Enrolled repo. The Home repo's survey,
 #   agent-implement-spec.yml, claims the spec (decompose) or the ticket
 #   (build) and dispatches the routing job, agent-route.yml, which routes it
-#   and dispatches the Enrolled repo's caller workflow (for the Marketplace,
-#   still in ship-it: .github/workflows/factory.yml) with `task=decompose` or
+#   and dispatches the Enrolled repo's caller workflow (its
+#   .github/workflows/factory.yml) with `task=decompose` or
 #   `task=build`. The caller calls this.
 #
 # THE CHAIN
@@ -69,8 +69,8 @@ name: Factory — Implement A Spec
 #                   branch and open the pull request. No Actions on it, so
 #                   nothing here can start the caller workflow around the
 #                   Registry.
-#     While the Marketplace is still in ship-it, both cover ship-it. Once it
-#     moves out, nothing in these runs can write the Home repo's code.
+#     The Home repo is never an Enrolled repo, so nothing in these runs can
+#     write the Home repo's code.
 #     Neither job has Workflows: write, so a push that changes
 #     `.github/workflows/` is refused. GH_TOKEN goes on the steps that call
 #     GitHub, never on the job, and never on an agent's step or a step that

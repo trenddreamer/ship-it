@@ -1,13 +1,10 @@
 node_modules/
-/build/
-/.react-router/
-/data/
+# A local .env and database from when the Marketplace lived here. Never
+# commit them.
 .env
 .env.*
-!.env.example
+/data/
 /reports/
 /.stryker-tmp/
-/test-results/
-/playwright-report/
 # Agents' git worktrees (Claude Code's isolated checkouts).
 /.claude/worktrees/

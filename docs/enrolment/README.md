@@ -108,7 +108,7 @@ Keep the `factory-evidence` branch out of CI and deploys too. The Factory commit
 
 **What it does:** Feedback from someone using the app becomes a Ticket in the Home repo, already carrying the repo's `repo:` label and `agent:explore`, so it routes and gets explored like any other Ticket. It is filed by the Feedback App, which can only open issues in the Home repo, so a compromised app server can't touch any code.
 
-Skip this step if the app has no feedback button. If it has one, it files Feedback the way the Marketplace does (`app/modules/feedback/`), with these settings in the app server's environment (for the Marketplace, Vercel's environment variables):
+Skip this step if the app has no feedback button. If it has one, it files Feedback the way the Marketplace does (`app/modules/feedback/` in `trenddreamer/ship-it-marketplace`), with these settings in the app server's environment (for the Marketplace, Vercel's environment variables):
 
 | Setting                        | Value                                                                                                                                                 |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |

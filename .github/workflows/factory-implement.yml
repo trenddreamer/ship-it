@@ -5,8 +5,8 @@ name: Factory — Implement A Ticket
 #
 # WHAT STARTS IT
 #   Nothing starts it on its own, and no event in the Enrolled repo can. An
-#   Enrolled repo's caller workflow calls it (for the Marketplace, still in
-#   ship-it: .github/workflows/factory.yml), and the Home repo's routing job,
+#   Enrolled repo's caller workflow calls it (its
+#   .github/workflows/factory.yml), and the Home repo's routing job,
 #   .github/workflows/agent-route.yml, dispatches that caller with
 #   `task=implement` and one Ticket.
 #
@@ -77,8 +77,8 @@ name: Factory — Implement A Ticket
 #                  read/write, to push the branch and open the pull request.
 #                  No Actions, so nothing here can start the caller workflow
 #                  around the Registry.
-#     While the Marketplace is still in ship-it, both cover ship-it. Once it
-#     moves out, nothing in this run can write the Home repo's code.
+#     The Home repo is never an Enrolled repo, so nothing in this run can
+#     write the Home repo's code.
 #     The commits, the pull request and the comments are the Factory's
 #     bot's, `<slug>[bot]`, and the Owner can approve the pull request.
 #     Neither has Workflows: write, so a push that changes
@@ -103,8 +103,8 @@ name: Factory — Implement A Ticket
 #   open a Ticket that gets read, only a collaborator's comments and the
 #   Factory's own get in, and the label is an approval only a collaborator
 #   (or the Factory, after explore) can give. Even a run steered by injected
-#   text holds no token that can write the Home repo's code (once the
-#   Marketplace has moved out of it), none that can start a run in this
+#   text holds no token that can write the Home repo's code, none that can
+#   start a run in this
 #   repo, and no Workflows permission. Its Actions permission is on the
 #   Home repo alone: it can start the Home repo's workflows, which route
 #   through the Registry before anything runs in an Enrolled repo.

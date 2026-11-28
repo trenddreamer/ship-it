@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "react", "unicorn", "import", "vitest"],
+  "plugins": ["typescript", "unicorn", "import", "vitest"],
   "categories": {
     "correctness": "error",
     "suspicious": "error"
@@ -13,20 +13,8 @@
         "varsIgnorePattern": "^_"
       }
     ],
-    "react/react-in-jsx-scope": "off",
-    "import/no-unassigned-import": [
-      "error",
-      {
-        "allow": ["**/*.css"]
-      }
-    ],
+    "import/no-unassigned-import": "error",
     "vitest/require-to-throw-message": "off"
   },
-  "ignorePatterns": [
-    "build/**",
-    ".react-router/**",
-    "data/**",
-    "app/db/migrations/**",
-    ".claude/worktrees/**"
-  ]
+  "ignorePatterns": [".claude/worktrees/**"]
 }
