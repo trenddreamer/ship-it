@@ -12,7 +12,7 @@ Follow [CODING_STANDARDS.md](./CODING_STANDARDS.md). Run `npm run check` before 
 
 ## The Team
 
-Four Grok Bots run the Factory for the Owner, acting through the Owner's GitHub account. Their charters are in `docs/team/`: a change there changes how the Team works. Their issues and comments end with `— <Role> (Team)`.
+Five Grok Bots, the Marketplace Team, run the Factory for the Owner, acting through the Owner's GitHub account. Their charters are in `docs/team/`: a change there changes how the Team works. Their issues and comments end with `— <Role> (Marketplace Team)`.
 
 ## Enrolled repos
 

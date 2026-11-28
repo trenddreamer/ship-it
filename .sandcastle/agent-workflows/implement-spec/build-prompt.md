@@ -21,8 +21,9 @@ ticket out of a queue.
   ticket is parked for a person. The workflow pushes and opens the pull
   request.
 - Leave `.github/` untouched.
-- When the change shows in the UI, save a before and an after screenshot as
-  PNGs in /tmp/evidence/, taken with `agent-browser`.
+- When the change shows in the UI, follow this repository's DESIGN.md, if it
+  has one, and save a before and an after screenshot as PNGs in
+  /tmp/evidence/, taken with `agent-browser`.
 
 When this repository has `.claude/skills/verify/SKILL.md`, its verification
 skill, follow it to start the app, sign in, reach a page and save screenshots.
