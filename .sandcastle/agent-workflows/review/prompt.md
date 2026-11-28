@@ -53,4 +53,8 @@ is already in the PR body. Reference each screenshot in the verdict by its
 absolute path, e.g. `![after](/tmp/evidence/after.png)`. The workflow uploads
 them.
 
+When this repository has `.claude/skills/verify/SKILL.md`, its verification
+skill, follow it to start the app, sign in, reach a page and save screenshots.
+Without one, work those out from the repository.
+
 When the work is done, end your final message with `<promise>COMPLETE</promise>`.

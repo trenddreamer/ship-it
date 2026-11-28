@@ -4,6 +4,10 @@ Your ticket is /tmp/ticket.md: the issue, then comments from people with write
 access, including the explore run's findings. Read those findings before you
 open any code. Build the ticket, and only the ticket.
 
+When this repository has a DIRECTION.md, read it first: build the ticket in
+the direction it describes. If the ticket goes against it, build the ticket as
+asked, and name the conflict in the pull request body.
+
 - Ship tests with the code. End with more passing tests than you started
   with, and none failing.
 - The work is done when this repository's checks pass: `{{CHECK}}`. The
@@ -16,6 +20,10 @@ open any code. Build the ticket, and only the ticket.
 - Leave `.github/` untouched.
 - When the change shows in the UI, save a before and an after screenshot as
   PNGs in /tmp/evidence/, taken with `agent-browser`.
+
+When this repository has `.claude/skills/verify/SKILL.md`, its verification
+skill, follow it to start the app, sign in, reach a page and save screenshots.
+Without one, work those out from the repository.
 
 Write /tmp/pr-body.md in the voice of the `pr` skill: what the ticket asked
 for, what you built, what you deliberately left out. In its Evidence section,
