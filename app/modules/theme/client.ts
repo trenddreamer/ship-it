@@ -1,4 +1,4 @@
-// Entry point: what the browser may use from Theme. Components import from
-// here. `./index` is browser-safe too today, but components go through
-// `client.ts` so the boundary check can hold every module to the same rule.
+// Entry point (safe for the browser): the theme someone picked, and what the
+// page does with it. Components and the root route import from here. Saving it
+// in a cookie is in `server.ts`; the colours themselves are in `theme.css`.
 export { nextThemeChoice, pageTheme, type ThemeChoice } from "./lib/choice";
