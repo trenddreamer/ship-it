@@ -5,6 +5,8 @@ ticket out of a queue.
   Build this, and only this.
 - /tmp/spec.md: the spec it came from, for context only. Other tickets cover
   the rest of it.
+- DIRECTION.md, when this repository has one: where the product is going.
+  Build the ticket in that direction, and name any conflict in your summary.
 
 - Tests ship in this ticket. End with more passing tests than you started
   with, and none failing.
@@ -21,6 +23,10 @@ ticket out of a queue.
 - Leave `.github/` untouched.
 - When the change shows in the UI, save a before and an after screenshot as
   PNGs in /tmp/evidence/, taken with `agent-browser`.
+
+When this repository has `.claude/skills/verify/SKILL.md`, its verification
+skill, follow it to start the app, sign in, reach a page and save screenshots.
+Without one, work those out from the repository.
 
 Write your summary to /tmp/pr-body.md: what the ticket asked for, what you
 built, what you deliberately left out. In its Evidence section, reference each
