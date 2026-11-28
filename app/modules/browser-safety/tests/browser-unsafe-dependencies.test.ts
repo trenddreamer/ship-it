@@ -22,6 +22,12 @@ describe("browserUnsafeDependencies", () => {
     expect(unsafe[0]).toMatch(/node_modules\/@libsql\/client\//);
   });
 
+  it("reports Drizzle's libSQL driver", async () => {
+    const unsafe = await browserUnsafeDependencies(fixture("drizzle-driver"));
+    expect(unsafe).toHaveLength(1);
+    expect(unsafe[0]).toMatch(/node_modules\/drizzle-orm\/libsql\//);
+  });
+
   it("reports a .server.ts file", async () => {
     expect(await browserUnsafeDependencies(fixture("server-only"))).toEqual([
       "app/modules/browser-safety/tests/fixtures/secret.server.ts",
