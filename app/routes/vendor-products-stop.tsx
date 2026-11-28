@@ -2,7 +2,7 @@ import { Form, Link, redirect } from "react-router";
 import { requireActingVendor } from "~/accounts.server";
 import { db } from "~/db/client.server";
 import { previewStop, stopSchema, stopSelling } from "~/modules/catalogue";
-import { deliveryScheduleLabel } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries/client";
 import { today } from "~/today.server";
 import type { Route } from "./+types/vendor-products-stop";
 

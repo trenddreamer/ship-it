@@ -1,7 +1,7 @@
 import { and, count, isNull } from "drizzle-orm";
 import { subscriptions } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
-import { deliveryScheduleLabel } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries/client";
 import { sendNotification, type DatabaseOrTransaction } from "~/modules/notifications";
 import { endSubscriptions, matching, type VendorStop } from "./end-subscriptions";
 

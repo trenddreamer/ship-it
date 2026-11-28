@@ -5,7 +5,7 @@ import { db } from "~/db/client.server";
 import { findDeliveryAddress } from "~/modules/accounts";
 import { deliveryAddressLine } from "~/modules/accounts/client";
 import { formatCalendarDate } from "~/modules/calendar";
-import { deliveryScheduleLabel } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries/client";
 import {
   cancelSubscription,
   changeSubscriptionSchema,

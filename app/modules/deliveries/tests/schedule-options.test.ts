@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deliveryScheduleLabel, deliveryScheduleOptions } from "../index";
+import { deliveryScheduleLabel, deliveryScheduleOptions } from "../client";
 
 describe("deliveryScheduleOptions", () => {
   it("names each Delivery Schedule a Vendor can offer, in order", () => {
