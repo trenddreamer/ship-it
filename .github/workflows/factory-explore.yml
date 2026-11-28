@@ -98,14 +98,17 @@ name: Factory — Explore The Tickets
 #   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token.
 #   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory
 #     App (ADR-0004). Each job's first step, .github/actions/factory-tokens,
-#     mints a token from them, and only its mint step sees the key. The
-#     token is new for each job, covers the Home repo alone (explore writes
-#     nothing in this Enrolled repo, and checks it out with GITHUB_TOKEN),
-#     carries only the permissions that job needs, and is revoked when the
-#     job ends:
-#       explore   Issues: read (the batch) and Contents: read (to clone the
-#                 agent scripts once the Home repo is private).
-#       apply     Issues: read/write (comments, labels, closing duplicates).
+#     mints its tokens from them, and only its mint step sees the key. Each
+#     token is new for each job, covers one repo, carries only the
+#     permissions that job needs, and is revoked when the job ends:
+#       explore   the Home repo only: Issues: read (the batch) and Contents:
+#                 read (to clone the agent scripts once the Home repo is
+#                 private). The agent's job writes nothing in this Enrolled
+#                 repo, and checks it out with GITHUB_TOKEN.
+#       apply     no agent. The Home repo: Issues: read/write (comments,
+#                 labels, closing duplicates). This Enrolled repo: Contents:
+#                 read/write, only to publish the screenshots to its
+#                 `factory-evidence` branch (ADR-0004, "Screenshots").
 #     So the findings and labels show as the Factory's bot, `<slug>[bot]`,
 #     not as the Owner.
 #     A label applied with the built-in GITHUB_TOKEN does NOT start another
@@ -315,17 +318,22 @@ jobs:
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
-      - name: Mint the Factory App's token
-        # Issues: read/write covers every write below: comments, labels and
-        # closing duplicates, all on Tickets in the Home repo. Nothing in this
-        # job runs code from a repo or from an agent; it reads the plan as
-        # data. The Home repo only. It also sets HOME_REPO.
+      - name: Mint the Factory App's tokens
+        # Issues: read/write on the Home repo covers every write below but
+        # one: comments, labels and closing duplicates, all on Tickets there.
+        # The other is the screenshots, published to this Enrolled repo's
+        # evidence branch with a token of their own, Contents: read/write and
+        # nothing else (ADR-0004, "Screenshots"). The explore job, where the
+        # agent runs, never holds it. Nothing in this job runs code from a
+        # repo or from an agent; it reads the plan as data. It also sets
+        # HOME_REPO.
         id: factory
         uses: trenddreamer/ship-it/.github/actions/factory-tokens@main
         with:
           app-id: ${{ secrets.FACTORY_APP_ID }}
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
           home-issues: write
+          enrolled-contents: write
 
       - name: Take the screenshots from the explore job
         if: needs.explore.result == 'success'
@@ -336,6 +344,14 @@ jobs:
           pattern: explore-evidence
           path: /tmp/evidence
           merge-multiple: true
+
+      - name: Publish the screenshots
+        # To the evidence branch. See .github/actions/publish-evidence.
+        if: needs.explore.result == 'success'
+        continue-on-error: true
+        uses: trenddreamer/ship-it/.github/actions/publish-evidence@main
+        with:
+          token: ${{ steps.factory.outputs.enrolled-token }}
 
       - name: Check the plan
         if: needs.explore.result == 'success'
@@ -404,9 +420,6 @@ jobs:
           gh label create "agent:implement" --color 5319E7 \
             --description "Hand this issue to the implementer agent" || true
 
-          # nullglob: an issue with no screenshots gets no --attach.
-          shopt -s nullglob
-
           # Survivors first, so "closed as duplicate of #N" points at an issue
           # that already has its findings on it. Duplicates are Tickets in the
           # same batch, so `#N` is a Ticket in the Home repo, where this
@@ -426,11 +439,13 @@ jobs:
 
             jq -r '.comment' <<< "$entry" > /tmp/comment.md
             printf '\n\n---\n\n_%s_ [Logs](%s)\n' "$next" "$RUN_URL" >> /tmp/comment.md
-            # This issue's screenshots, /tmp/evidence/<n>-*.png. --attach
-            # uploads them and swaps each path in the comment for its URL.
-            attach=()
-            for png in /tmp/evidence/"$n"-*.png; do attach+=(--attach "$png"); done
-            gh issue comment "$n" --body-file /tmp/comment.md "${attach[@]}"
+            # This issue's screenshots, /tmp/evidence/<n>-*.png, published
+            # above. The comment points at them, and gets any it didn't
+            # reference.
+            [ -z "${EVIDENCE_CLI:-}" ] ||
+              node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/comment.md "${n}-" ||
+              echo "::warning::The screenshots could not be embedded. Posting without them."
+            gh issue comment "$n" --body-file /tmp/comment.md
 
             # The branch. Every path takes `agent:in-progress` off: this
             # issue is done, and the steps below leave it alone.

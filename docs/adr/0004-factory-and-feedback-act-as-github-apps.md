@@ -11,6 +11,20 @@ The Factory acts on GitHub as a GitHub App, `…-factory`, installed on the Home
 
 On GitHub Free, branch protection and rulesets work only on public repos, so on a private repo an approval is recorded but not required. The Factory may merge Two-way door changes itself (see `GLOSSARY.md`). What gates that merge belongs to the task design.
 
+## Screenshots
+
+The agents take screenshots as evidence, and the Owner wants them inline in Tickets and PRs. GitHub's own attachments (`gh --attach`, the upload behind dragging an image into a comment) refuse every GitHub App installation token, whatever its permissions. The upload endpoint answers 404, and GitHub's CLI maintainers call that intended ([cli/cli#14309](https://github.com/cli/cli/issues/14309)). They worked only while the Factory acted through the Owner's personal token.
+
+So the Factory commits each run's screenshots to a branch of their own in the Enrolled repo, `factory-evidence`, in a folder per run, and links to each by its `raw/` URL. GitHub shows those inline to anyone signed in who can read the repo, private or not. The branch is never merged. Publishing is one commit through the Git database API, never a force-push, by `.github/actions/publish-evidence`. A run whose screenshots don't publish still posts, saying which are missing.
+
+What it costs:
+
+- **Explore and decompose gain a write token on the Enrolled repo.** Their agents still never hold it: the screenshots are published from the job after the agent's, which runs no agent and holds Contents: write on the Enrolled repo and nothing else there.
+- **The images live in git.** A full clone of the Enrolled repo fetches the branch, which only grows. Deleting the branch prunes it, and breaks the images in every comment that used them.
+- **Each push to the branch is a push.** A host that deploys every branch, like Vercel, must ignore `factory-evidence`, and so must any CI that runs on push to every branch (the enrolment steps say how).
+
+Rejected: a person's credentials only for the upload (a machine account's web session, or an App user token, `ghu_`, which acts as the Owner), because it brings back a long-lived personal credential in every Enrolled repo; and hosting outside GitHub, because a private app's screenshots would leave it.
+
 ## Why a separate Feedback App
 
 A feedback button runs on a public-facing server, so the credential it holds must be able to do nothing but file issues in the Home repo. The web app mints a short-lived installation token for each submission.

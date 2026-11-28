@@ -394,6 +394,15 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
 
+      - name: Publish the screenshots
+        # To the evidence branch, with the enrolled token, which can already
+        # push here. See .github/actions/publish-evidence.
+        if: always() && steps.pr.outputs.number != ''
+        continue-on-error: true
+        uses: trenddreamer/ship-it/.github/actions/publish-evidence@main
+        with:
+          token: ${{ steps.factory.outputs.enrolled-token }}
+
       - name: Post the verdict on the pull request
         id: verdict
         if: always() && steps.pr.outputs.number != ''
@@ -423,14 +432,12 @@ jobs:
             echo "Reviewed by the Factory's review workflow, for ${HOME_REPO}#${TICKET} — [logs](${RUN_URL})."
             echo "This run saw the diff, the standards and the Ticket, and nothing else."
           } >> /tmp/review-verdict.md
-          # Uploads the agent's screenshots and swaps each /tmp/evidence path
-          # in the body for its URL. nullglob: none means no --attach.
-          shopt -s nullglob
-          attach=()
-          for png in /tmp/evidence/*.png; do attach+=(--attach "$png"); done
+          # Points each /tmp/evidence path at the screenshot published above.
+          [ -z "${EVIDENCE_CLI:-}" ] || node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/review-verdict.md ||
+            echo "::warning::The screenshots could not be embedded. Posting without them."
           # gh prints the new comment's URL: the Ticket links to it.
           url="$(gh pr comment "$PR_NUMBER" -R "$ENROLLED_REPO" \
-            --body-file /tmp/review-verdict.md "${attach[@]}")"
+            --body-file /tmp/review-verdict.md)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Post the inline comments

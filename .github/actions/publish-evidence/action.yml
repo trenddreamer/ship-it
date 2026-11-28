@@ -1,0 +1,63 @@
+name: Publish the agent's screenshots
+description: >-
+  Commits the PNGs in /tmp/evidence to the Enrolled repo's `factory-evidence`
+  branch, so a comment, pull request or Ticket can show them inline. Sets
+  EVIDENCE_CLI and EVIDENCE_MAP for the steps that embed them.
+
+# WHY NOT `gh --attach`
+#   GitHub's attachment upload refuses every GitHub App installation token,
+#   whatever its permissions, and answers 404 (cli/cli#14309). It worked while
+#   the Factory acted through the Owner's personal token. ADR-0004 says why the
+#   Factory now commits its screenshots instead.
+#
+# WHAT IT DOES
+#   One commit on `factory-evidence`, in the folder `<run id>-<attempt>`,
+#   through the Git database API: nothing is cloned or force-pushed. The branch
+#   is never merged. GitHub shows its `raw/` URLs inline to anyone signed in
+#   who can read the repo. A failure to publish is a warning: the body still
+#   goes out, and says which screenshots are missing. Each step that embeds
+#   them warns rather than fails if embedding does, so a body is never lost
+#   to its screenshots.
+#
+# THEN, IN A LATER STEP
+#     node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" body.md [<prefix>]
+#   points the body's /tmp/evidence paths at their URLs, and appends any of
+#   its own (named <prefix>*, or all with no prefix) that it didn't reference.
+#   See .sandcastle/agent-workflows/shared/evidence.ts.
+#
+# THE SCRIPT
+#   Comes from this action's own copy of the Home repo: GitHub downloads the
+#   whole repo at the `uses:` ref to run an action from it. It imports only
+#   Node's builtins, so it needs no `npm ci`.
+
+inputs:
+  token:
+    description: "A token for the Enrolled repo with Contents: write (factory-tokens' `enrolled-token`)."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js 22
+      uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+
+    - name: Commit the screenshots to the evidence branch
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        CLI: ${{ github.action_path }}/../../../.sandcastle/agent-workflows/shared/evidence-cli.ts
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        cli="$(realpath "$CLI")"
+        map="$RUNNER_TEMP/evidence-map.json"
+        # Before publishing, so a later step can still embed: a screenshot
+        # that didn't publish becomes a note, never a broken /tmp path.
+        echo '{"files":[],"urls":{}}' > "$map"
+        {
+          echo "EVIDENCE_CLI=$cli"
+          echo "EVIDENCE_MAP=$map"
+        } >> "$GITHUB_ENV"
+        node "$cli" publish "$GITHUB_REPOSITORY" "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" "$map"

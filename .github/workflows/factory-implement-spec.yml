@@ -55,10 +55,14 @@ name: Factory — Implement A Spec
 #     token's permissions apply to every repo it covers, so each covers one
 #     repo, and each is revoked when the job ends:
 #       decompose   one token, for the Home repo only: Issues: read/write
-#                   (the spec, the queue), Contents: read (to clone the
-#                   agent scripts once it is private), Actions: read/write
-#                   (the chain). It needs nothing written here: the checkout
-#                   uses GITHUB_TOKEN.
+#                   (the spec), Contents: read (to clone the agent scripts
+#                   once it is private). It needs nothing written here: the
+#                   checkout uses GITHUB_TOKEN.
+#       file        no agent. The same Home repo token for the tickets, with
+#                   Actions: read/write (the chain) and no Contents, and one
+#                   for this Enrolled repo with Contents: read/write only, to
+#                   publish the decompose agent's screenshots. The agent's
+#                   own job never holds that one (ADR-0004, "Screenshots").
 #       build       the same Home repo token, its Actions dispatching review
 #                   and the chain, and one for this Enrolled repo only, with
 #                   Contents and Pull requests: read/write, to push the
@@ -144,7 +148,6 @@ jobs:
           private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
           home-issues: write
           home-contents: read
-          home-actions: write
 
       - name: Mark the spec in progress
         # The survey claimed it before dispatching this run. This is for a run
@@ -194,13 +197,85 @@ jobs:
           "$RUNNER_TEMP/factory/node_modules/.bin/tsx" \
             "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/implement-spec/decompose.ts"
 
+      - name: Hand the queue to the file job
+        uses: actions/upload-artifact@v4
+        with:
+          name: decompose-queue
+          path: ${{ runner.temp }}/queue.json
+          if-no-files-found: error
+
+      - name: Hand the screenshots to the file job
+        uses: actions/upload-artifact@v4
+        with:
+          name: decompose-evidence
+          path: /tmp/evidence/*.png
+          if-no-files-found: ignore
+
+  # ── LOOP ONE, PART TWO: file the queue ────────────────────────────────────
+  # The tickets, their screenshots, and the chain. A job of its own so that
+  # only a job with no agent in it holds a token that can write the Enrolled
+  # repo: publishing the screenshots needs one (ADR-0004, "Screenshots").
+  file:
+    needs: decompose
+    # Even when decompose failed, so the spec is still parked and the chain
+    # still moves on.
+    if: always() && inputs.task == 'decompose'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # No checkout and no agent, so the GITHUB_TOKEN gets nothing. It reads
+    # the queue as data, and writes with the Factory App's tokens.
+    permissions: {}
+
+    env:
+      SPEC: ${{ inputs.spec }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Mint the Factory App's tokens
+        # Two, each for one repo (see WHAT IT NEEDS). It also sets HOME_REPO.
+        id: factory
+        uses: trenddreamer/ship-it/.github/actions/factory-tokens@main
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          home-issues: write
+          home-actions: write
+          enrolled-contents: write
+
+      - name: Take the queue from the decompose job
+        if: needs.decompose.result == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: decompose-queue
+          path: ${{ runner.temp }}/queue
+
+      - name: Take the screenshots from the decompose job
+        if: needs.decompose.result == 'success'
+        # A pattern, not a name, so a run with no screenshots finds nothing
+        # and carries on.
+        uses: actions/download-artifact@v4
+        with:
+          pattern: decompose-evidence
+          path: /tmp/evidence
+          merge-multiple: true
+
+      - name: Publish the screenshots
+        # To the evidence branch. See .github/actions/publish-evidence.
+        if: needs.decompose.result == 'success'
+        continue-on-error: true
+        uses: trenddreamer/ship-it/.github/actions/publish-evidence@main
+        with:
+          token: ${{ steps.factory.outputs.enrolled-token }}
+
       - name: Write the queue as tickets
         # In the Home repo, where every Ticket lives.
+        if: needs.decompose.result == 'success'
         env:
           GH_TOKEN: ${{ steps.factory.outputs.home-token }}
         run: |
           set -euo pipefail
-          cp "$RUNNER_TEMP/queue.json" /tmp/queue.json
+          cp "$RUNNER_TEMP/queue/queue.json" /tmp/queue.json
           jq '.' /tmp/queue.json
 
           # A run that waited behind another for this spec writes nothing: the
@@ -229,10 +304,8 @@ jobs:
           total=$(jq '.tickets | length' /tmp/queue.json)
           echo "Writing $total tickets for spec #${SPEC}."
 
-          # A ticket's screenshots are /tmp/evidence/<position>-*.png. --attach
-          # uploads them and swaps each path in the body for its URL.
-          # nullglob: none means no --attach.
-          shopt -s nullglob
+          # A ticket's screenshots are /tmp/evidence/<position>-*.png, published
+          # above. Its body points at them, and gets any it didn't reference.
 
           for i in $(seq 0 $((total - 1))); do
             title=$(jq -r ".tickets[$i].title" /tmp/queue.json)
@@ -255,16 +328,16 @@ jobs:
               jq -r ".tickets[$i].body" /tmp/queue.json
             } > /tmp/ticket-body.md
 
-            attach=()
-            for png in /tmp/evidence/"${position}"-*.png; do attach+=(--attach "$png"); done
+            [ -z "${EVIDENCE_CLI:-}" ] ||
+              node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/ticket-body.md "${position}-" ||
+              echo "::warning::The screenshots could not be embedded. Posting without them."
 
             gh issue create -R "$HOME_REPO" \
               --title "$title" \
               --body-file /tmp/ticket-body.md \
               --label "spec:${SPEC}" \
               --label "agent:queued" \
-              --label "$repo_label" \
-              "${attach[@]}"
+              --label "$repo_label"
           done
 
           gh issue comment "$SPEC" -R "$HOME_REPO" --body \
@@ -272,7 +345,8 @@ jobs:
 
       - name: Park the spec on failure
         # Without this the chain would decompose it again at once, forever.
-        if: failure() || cancelled()
+        # Here, or in the decompose job.
+        if: failure() || cancelled() || needs.decompose.result != 'success'
         env:
           GH_TOKEN: ${{ steps.factory.outputs.home-token }}
         run: |
@@ -280,7 +354,7 @@ jobs:
             --description "An agent run failed here. Its comment says how to retry" || true
           gh issue edit "$SPEC" -R "$HOME_REPO" --add-label "agent:blocked" || true
           gh issue comment "$SPEC" -R "$HOME_REPO" --body \
-            "Decompose run **${{ job.status }}** in \`${GITHUB_REPOSITORY}\` — [logs](${RUN_URL}). Parked. Take \`agent:blocked\` off to put the spec back in the queue. <!-- factory:status -->" || true
+            "Decompose run **${{ needs.decompose.result != 'success' && needs.decompose.result || job.status }}** in \`${GITHUB_REPOSITORY}\` — [logs](${RUN_URL}). Parked. Take \`agent:blocked\` off to put the spec back in the queue. <!-- factory:status -->" || true
 
       - name: Always remove in-progress
         # After the park, so the survey never sees the spec free and unparked.
@@ -485,10 +559,16 @@ jobs:
           node "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/implement/finish-pr-body.ts" \
             "$HOME_REPO" "$TICKET" "$RUN_URL" "$SPEC" < /tmp/pr-body.md > /tmp/pr-body-final.md
 
+      - name: Publish the screenshots
+        # To the evidence branch. See .github/actions/publish-evidence.
+        continue-on-error: true
+        uses: trenddreamer/ship-it/.github/actions/publish-evidence@main
+        with:
+          token: ${{ steps.factory.outputs.enrolled-token }}
+
       - name: Open the draft pull request
         id: pr
         env:
-          # `--attach` with an App's token is still to be seen on a live run.
           GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           # The ticket's title is in the Home repo, read with its own token.
           HOME_TOKEN: ${{ steps.factory.outputs.home-token }}
@@ -498,9 +578,9 @@ jobs:
           # Into the default branch: GitHub ignores `Closes` anywhere else.
           base="$(gh repo view "$ENROLLED_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
 
-          shopt -s nullglob
-          attach=()
-          for png in /tmp/evidence/*.png; do attach+=(--attach "$png"); done
+          # Each /tmp/evidence path points at the screenshot published above.
+          [ -z "${EVIDENCE_CLI:-}" ] || node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/pr-body-final.md ||
+            echo "::warning::The screenshots could not be embedded. Posting without them."
 
           url="$(gh pr create \
             -R "$ENROLLED_REPO" \
@@ -508,8 +588,7 @@ jobs:
             --base "$base" \
             --head "$BRANCH" \
             --title "$title" \
-            --body-file /tmp/pr-body-final.md \
-            "${attach[@]}")"
+            --body-file /tmp/pr-body-final.md)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Hand the pull request to the reviewer
