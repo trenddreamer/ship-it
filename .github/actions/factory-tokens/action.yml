@@ -1,0 +1,154 @@
+name: Mint the Factory's tokens
+description: >-
+  Mints a shared workflow's Factory App tokens (ADR-0004): one for the Home
+  repo and, if the job asks for one, one for the Enrolled repo it runs in.
+  Names the Home repo for the rest of the job, and says who the Factory's bot
+  is.
+
+# THE HOME REPO
+#   This is the one place the Home repo is named for the shared workflows.
+#   The first step exports it to the rest of the job as HOME_REPO, and it is
+#   the `home-repo` output. A job that uses this action must not set
+#   HOME_REPO itself. (The `uses:` lines that load the shared workflows and
+#   these actions, `trenddreamer/ship-it/...@main`, name it too: GitHub
+#   doesn't allow an expression there.)
+#
+# TWO TOKENS, NOT ONE
+#   A token's permissions apply to every repo it covers. One token for the
+#   Home repo and the Enrolled repo with Contents: write would let a steered
+#   run push to the Home repo's `main` (repos.yml, the agent scripts every
+#   later run executes with other tokens), and one with Actions: write would
+#   let it dispatch the Enrolled repo's caller directly, skipping the
+#   Registry. So:
+#
+#     home       the Home repo only: the Tickets (Issues), the agent scripts
+#                (Contents: read, to clone them once the repo is private),
+#                and, for a job that chains, Actions: write to dispatch the
+#                Home repo's own routing and queue workflows.
+#     enrolled   the Enrolled repo only (`github.repository`): Contents and
+#                Pull requests, to push and open or review the pull request.
+#                Never Actions. Minted only if the job asks for one of them.
+#
+#   While the Marketplace is still in ship-it, the Home repo is its Enrolled
+#   repo, so both tokens cover ship-it and the enrolled token can still push
+#   there. Once it moves out, the enrolled token covers the Marketplace's
+#   repo alone, and nothing in an Enrolled run can write the Home repo's code.
+#
+#   Each job passes the permissions it needs, as `read` or `write`; an input
+#   left empty gives none. A token minted with no `permission-*` at all would
+#   get every permission the App has, so the home token must be given at
+#   least one, and the enrolled token is only minted when it is given one.
+#
+# THE PRIVATE KEY
+#   Only the two mint steps get it. Every token is revoked when the job ends.
+
+inputs:
+  app-id:
+    description: The Factory App's ID (secrets.FACTORY_APP_ID).
+    required: true
+  private-key:
+    description: The Factory App's private key (secrets.FACTORY_APP_PRIVATE_KEY).
+    required: true
+  home-issues:
+    description: The home token's Issues permission (`read`, `write`, or empty for none).
+    required: false
+    default: ""
+  home-contents:
+    description: The home token's Contents permission. `read` to clone the agent scripts.
+    required: false
+    default: ""
+  home-actions:
+    description: The home token's Actions permission. `write` only for a job that chains.
+    required: false
+    default: ""
+  enrolled-contents:
+    description: The enrolled token's Contents permission.
+    required: false
+    default: ""
+  enrolled-pull-requests:
+    description: The enrolled token's Pull requests permission.
+    required: false
+    default: ""
+
+outputs:
+  home-repo:
+    description: The Home repo, `owner/name`. Also exported to the job as HOME_REPO.
+    value: ${{ steps.repos.outputs.home-repo }}
+  home-token:
+    description: The token for the Home repo.
+    value: ${{ steps.home.outputs.token }}
+  enrolled-token:
+    description: The token for the Enrolled repo, or empty if the job asked for none.
+    value: ${{ steps.enrolled.outputs.token }}
+  bot-login:
+    description: The Factory's bot account, `<slug>[bot]`.
+    value: ${{ steps.bot.outputs.login }}
+  bot-email:
+    description: The bot's noreply address, for its commits.
+    value: ${{ steps.bot.outputs.email }}
+
+runs:
+  using: composite
+  steps:
+    - name: Name the Home repo and the Enrolled repo
+      id: repos
+      shell: bash
+      env:
+        # The Home repo. See THE HOME REPO above.
+        HOME_REPO: trenddreamer/ship-it
+        HOME_PERMISSIONS: ${{ inputs.home-issues }}${{ inputs.home-contents }}${{ inputs.home-actions }}
+        ENROLLED_PERMISSIONS: ${{ inputs.enrolled-contents }}${{ inputs.enrolled-pull-requests }}
+      run: |
+        set -euo pipefail
+        if [ -z "$HOME_PERMISSIONS" ]; then
+          echo "::error::The home token needs at least one permission. With none it would get all of the App's."
+          exit 1
+        fi
+        {
+          echo "home-repo=${HOME_REPO}"
+          echo "home-owner=${HOME_REPO%%/*}"
+          echo "home-name=${HOME_REPO#*/}"
+          echo "enrolled-owner=${GITHUB_REPOSITORY%%/*}"
+          echo "enrolled-name=${GITHUB_REPOSITORY#*/}"
+          if [ -n "$ENROLLED_PERMISSIONS" ]; then echo "enrolled=true"; fi
+        } >> "$GITHUB_OUTPUT"
+        echo "HOME_REPO=${HOME_REPO}" >> "$GITHUB_ENV"
+
+    - name: Mint the Home repo's token
+      id: home
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: ${{ steps.repos.outputs.home-owner }}
+        repositories: ${{ steps.repos.outputs.home-name }}
+        permission-issues: ${{ inputs.home-issues }}
+        permission-contents: ${{ inputs.home-contents }}
+        permission-actions: ${{ inputs.home-actions }}
+
+    - name: Mint the Enrolled repo's token
+      id: enrolled
+      if: steps.repos.outputs.enrolled == 'true'
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ inputs.app-id }}
+        private-key: ${{ inputs.private-key }}
+        owner: ${{ steps.repos.outputs.enrolled-owner }}
+        repositories: ${{ steps.repos.outputs.enrolled-name }}
+        permission-contents: ${{ inputs.enrolled-contents }}
+        permission-pull-requests: ${{ inputs.enrolled-pull-requests }}
+
+    - name: Who the Factory is
+      # The App's bot account, so its commits are linked to it on GitHub, and
+      # the comment filter knows which bot's comments are the Factory's own:
+      # `<slug>[bot]`, and the noreply address with the bot's user id.
+      id: bot
+      shell: bash
+      env:
+        GH_TOKEN: ${{ steps.home.outputs.token }}
+        LOGIN: ${{ steps.home.outputs.app-slug }}[bot]
+      run: |
+        set -euo pipefail
+        id="$(gh api "/users/${LOGIN}" --jq .id)"
+        echo "login=${LOGIN}" >> "$GITHUB_OUTPUT"
+        echo "email=${id}+${LOGIN}@users.noreply.github.com" >> "$GITHUB_OUTPUT"

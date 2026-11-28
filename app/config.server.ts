@@ -1,5 +1,5 @@
 // Configuration from the environment. Every value has a local default (or,
-// for Feedback's token, works without one), so local development, the checks
+// for the Feedback App's credentials, works without them), so local development, the checks
 // and the journey need no configuration. Set them all in production.
 //
 // - SESSION_SECRET: signs the session cookie.
@@ -12,15 +12,18 @@
 //   NODE_ENV=production. Only the journey sets it (its server is a production
 //   build). Outside production the route always accepts one; on a Vercel
 //   production deployment (VERCEL_ENV=production) never.
-// - FEEDBACK_GITHUB_TOKEN: when set, Feedback opens a real GitHub issue,
-//   labelled `agent:explore` and `feedback`; when not, it is only logged to
-//   the server console. No default and no warning. Locally it can be any
-//   token with Issues: write on the repo. Production needs its own scoped
-//   token (see the Before production issue). Actions' built-in GITHUB_TOKEN
-//   won't work: labels it applies don't start workflows, so `agent:explore`
-//   would never start a run.
-// - FEEDBACK_GITHUB_REPO: the repo Feedback issues open in, as `owner/name`.
-//   Defaults to `trenddreamer/ship-it`.
+// - FEEDBACK_APP_ID, FEEDBACK_APP_PRIVATE_KEY, FEEDBACK_APP_INSTALLATION_ID:
+//   the Feedback App's ID, private key (PEM; on one line, write `\n` for its
+//   line breaks) and the ID of its installation on the Home repo (ADR-0004).
+//   When all three are set, each piece of Feedback mints a short-lived
+//   installation token and opens a real GitHub issue as the App, labelled
+//   `agent:explore`, `feedback` and FEEDBACK_REPO_LABEL. When none is set, it
+//   is only logged to the server console, with no default and no warning.
+//   When only some are, it is only logged, with a warning naming the rest.
+// - FEEDBACK_GITHUB_REPO: the Home repo, where Feedback issues open, as
+//   `owner/name`. Defaults to `trenddreamer/ship-it`.
+// - FEEDBACK_REPO_LABEL: the `repo:` label that routes Feedback to this app's
+//   Enrolled repo. Defaults to `repo:marketplace`.
 
 const defaults = {
   SESSION_SECRET: "ship-it-local-session-secret",
@@ -52,7 +55,10 @@ export const config = {
       (process.env.NODE_ENV !== "production" || process.env.ACCEPT_JOB_TODAY === "true"),
   },
   feedback: {
-    githubToken: process.env.FEEDBACK_GITHUB_TOKEN || undefined,
-    githubRepo: process.env.FEEDBACK_GITHUB_REPO || "trenddreamer/ship-it",
+    appId: process.env.FEEDBACK_APP_ID,
+    privateKey: process.env.FEEDBACK_APP_PRIVATE_KEY,
+    installationId: process.env.FEEDBACK_APP_INSTALLATION_ID,
+    repo: process.env.FEEDBACK_GITHUB_REPO || "trenddreamer/ship-it",
+    repoLabel: process.env.FEEDBACK_REPO_LABEL || "repo:marketplace",
   },
 };

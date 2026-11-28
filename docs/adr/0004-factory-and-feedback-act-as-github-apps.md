@@ -13,7 +13,7 @@ On GitHub Free, branch protection and rulesets work only on public repos, so on 
 
 ## Why a separate Feedback App
 
-A feedback button runs on a public-facing server, so the credential it holds must be able to do nothing but file issues in the Home repo. The web app mints a short-lived token for each submission with `@octokit/auth-app`.
+A feedback button runs on a public-facing server, so the credential it holds must be able to do nothing but file issues in the Home repo. The web app mints a short-lived installation token for each submission.
 
 The Factory's workflows decide who may steer a run by `authorAssociation` (`OWNER`, `MEMBER`, `COLLABORATOR`). Under a token belonging to the Owner, Feedback typed by anyone using the app would arrive as the Owner's own words, and the Factory couldn't tell the Owner's instructions from a stranger's text. Under the Feedback App, it arrives from the feedback bot, and the Factory reads it as a description of a problem, never as instructions.
 

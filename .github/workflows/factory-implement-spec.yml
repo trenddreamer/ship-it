@@ -1,0 +1,575 @@
+name: Factory — Implement A Spec
+
+# The spec queue's two loops, as a shared workflow: it lives in the Home repo
+# and runs inside an Enrolled repo (ADR-0003). The queue itself, its survey
+# and its cron stay in the Home repo, in agent-implement-spec.yml; read that
+# file's header first.
+#
+#   decompose   one spec in, a queue of tickets out. The agent reads the
+#               Enrolled repo's code to cut the spec, and the tickets are
+#               written into the Home repo, where every Ticket lives
+#               (ADR-0002), each with `spec:<n>`, `agent:queued` and the
+#               spec's `repo:` label, so each routes where the spec does.
+#   build       one frontier ticket in, one DRAFT pull request out, in the
+#               Enrolled repo. Its body ends `Closes <Home>#<ticket>. Part of
+#               <Home>#<spec>.`, the cross-repo form, so merging it closes the
+#               ticket in the Home repo, and closed means merged. Then it
+#               hands the pull request to the reviewer through the Home repo's
+#               routing job, as implement does.
+#
+# WHAT STARTS IT
+#   Nothing in the Enrolled repo. The Home repo's survey,
+#   agent-implement-spec.yml, claims the spec (decompose) or the ticket
+#   (build) and dispatches the routing job, agent-route.yml, which routes it
+#   and dispatches the Enrolled repo's caller workflow (for the Marketplace,
+#   still in ship-it: .github/workflows/factory.yml) with `task=decompose` or
+#   `task=build`. The caller calls this.
+#
+# THE CHAIN
+#   Each loop ends by dispatching agent-implement-spec.yml in the Home repo,
+#   at its default branch, whatever happened: it surveys the queue again and
+#   starts the next ticket. A failure parks the spec or ticket with
+#   `agent:blocked` first, so the next survey moves past it and doesn't
+#   retry it forever. The chain is the Home repo's, never an event here.
+#
+# WHICH REPO IS WHICH
+#   It runs in the Enrolled repo, so `github.repository` (ENROLLED_REPO) is
+#   where the code is checked out, pushed and the pull request opened, and
+#   where the run page lives. The spec and its tickets live in the Home repo,
+#   HOME_REPO, and every `gh` call about them says so with `-R` or
+#   `repos/$HOME_REPO`. The agent scripts come from the Home repo's `main`,
+#   cloned outside the workspace:
+#   .sandcastle/agent-workflows/implement-spec/decompose.ts and build.ts.
+#
+# WHAT IT NEEDS (passed by the caller, never inherited)
+#   inputs.task — `decompose` or `build`.
+#   inputs.spec — the spec's number in the Home repo.
+#   inputs.ticket — for build, the ticket's number in the Home repo.
+#   inputs.install, inputs.seed, inputs.check — the Enrolled repo's Contract.
+#     Decompose runs only install: it reads the code and writes tickets. Build
+#     runs all three, as implement does, and its prompt names `check`.
+#   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token.
+#   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory
+#     App (ADR-0004). Each job's first step, .github/actions/factory-tokens,
+#     mints its tokens from them, and only its mint steps see the key. A
+#     token's permissions apply to every repo it covers, so each covers one
+#     repo, and each is revoked when the job ends:
+#       decompose   one token, for the Home repo only: Issues: read/write
+#                   (the spec, the queue), Contents: read (to clone the
+#                   agent scripts once it is private), Actions: read/write
+#                   (the chain). It needs nothing written here: the checkout
+#                   uses GITHUB_TOKEN.
+#       build       the same Home repo token, its Actions dispatching review
+#                   and the chain, and one for this Enrolled repo only, with
+#                   Contents and Pull requests: read/write, to push the
+#                   branch and open the pull request. No Actions on it, so
+#                   nothing here can start the caller workflow around the
+#                   Registry.
+#     While the Marketplace is still in ship-it, both cover ship-it. Once it
+#     moves out, nothing in these runs can write the Home repo's code.
+#     Neither job has Workflows: write, so a push that changes
+#     `.github/workflows/` is refused. GH_TOKEN goes on the steps that call
+#     GitHub, never on the job, and never on an agent's step or a step that
+#     runs code the agent wrote. See factory-implement.yml's WHERE THE TOKENS
+#     GO for what that does and doesn't protect.
+#   secrets.GITHUB_TOKEN — the Enrolled checkout only. The caller's job sets
+#     its permissions.
+
+on:
+  workflow_call:
+    inputs:
+      task:
+        description: "`decompose` or `build`."
+        type: string
+        required: true
+      spec:
+        description: The spec's number in the Home repo.
+        type: string
+        required: true
+      ticket:
+        description: For build, the ticket's number in the Home repo.
+        type: string
+        required: false
+        default: ""
+      install:
+        description: The Contract's install command, run at the Enrolled repo's root.
+        type: string
+        required: true
+      seed:
+        description: The Contract's seed command, run after install.
+        type: string
+        required: true
+      check:
+        description: The Contract's check command, run over the agent's commits.
+        type: string
+        required: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      FACTORY_APP_ID:
+        required: true
+      FACTORY_APP_PRIVATE_KEY:
+        required: true
+
+# HOME_REPO, where the spec and its tickets live and the agent scripts come
+# from, is set for each job by its first step, .github/actions/factory-tokens.
+
+jobs:
+  # ── LOOP ONE: decompose ───────────────────────────────────────────────────
+  decompose:
+    if: inputs.task == 'decompose'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read # the Enrolled checkout. Everything else uses the App's token.
+
+    # One decompose per spec. A second dispatch waits, then finds the queue
+    # written and writes nothing (see "Write the queue as tickets").
+    concurrency:
+      group: agent-decompose-${{ inputs.spec }}
+      cancel-in-progress: false
+
+    env:
+      SPEC: ${{ inputs.spec }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Mint the Factory App's token
+        # The Home repo's only (see WHAT IT NEEDS). It also sets HOME_REPO.
+        id: factory
+        uses: trenddreamer/ship-it/.github/actions/factory-tokens@main
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          home-issues: write
+          home-contents: read
+          home-actions: write
+
+      - name: Mark the spec in progress
+        # The survey claimed it before dispatching this run. This is for a run
+        # that waited behind another on the same spec.
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: gh issue edit "$SPEC" -R "$HOME_REPO" --add-label "agent:in-progress"
+
+      - name: Check out the Enrolled repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up the agent scripts from the Home repo
+        # Into $RUNNER_TEMP/factory, outside the workspace, with Node 22 and
+        # their dependencies. See .github/actions/factory-scripts.
+        uses: trenddreamer/ship-it/.github/actions/factory-scripts@main
+        with:
+          home-repo: ${{ steps.factory.outputs.home-repo }}
+          token: ${{ steps.factory.outputs.home-token }}
+
+      - name: Install the Enrolled repo (the Contract's install)
+        env:
+          INSTALL: ${{ inputs.install }}
+        run: bash -euo pipefail -c "$INSTALL"
+
+      - name: Install the agent's tools
+        # Claude Code, Matt Pocock's skills and agent-browser.
+        uses: trenddreamer/ship-it/.github/actions/agent-tools@main
+
+      - name: Read the spec
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: |
+          set -euo pipefail
+          gh issue view "$SPEC" -R "$HOME_REPO" --json number,title,body \
+            --jq '"# " + .title + "\n\n" + .body' > /tmp/spec.md
+          cat /tmp/spec.md
+
+      - name: Decompose the spec into a queue
+        # Reads only. The queue comes back as queue.json, shaped and validated
+        # by .sandcastle/agent-workflows/implement-spec/decomposition-schema.ts.
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OUTPUT_DIR: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/factory/node_modules/.bin/tsx" \
+            "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/implement-spec/decompose.ts"
+
+      - name: Write the queue as tickets
+        # In the Home repo, where every Ticket lives.
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/queue.json" /tmp/queue.json
+          jq '.' /tmp/queue.json
+
+          # A run that waited behind another for this spec writes nothing: the
+          # queue is there already.
+          existing="$(gh issue list -R "$HOME_REPO" --state all --label "spec:${SPEC}" \
+            --limit 1 --json number --jq length)"
+          if [ "$existing" -gt 0 ]; then
+            echo "Spec #${SPEC} already has a queue. Writing nothing."
+            exit 0
+          fi
+
+          # Each ticket goes where its spec goes: the Home repo routed the
+          # spec by its one `repo:` label, so the tickets carry the same one.
+          repo_label="$(gh issue view "$SPEC" -R "$HOME_REPO" --json labels \
+            --jq '[.labels[].name | select(startswith("repo:"))] | first // empty')"
+          if [ -z "$repo_label" ]; then
+            echo "::error::Spec #${SPEC} has no \`repo:\` label, so its tickets could not be routed."
+            exit 1
+          fi
+
+          gh label create "spec:${SPEC}" -R "$HOME_REPO" --color BFD4F2 \
+            --description "A ticket in the queue for spec #${SPEC}" || true
+          gh label create "agent:queued" -R "$HOME_REPO" --color FEF2C0 \
+            --description "Waiting for the implement-spec chain" || true
+
+          total=$(jq '.tickets | length' /tmp/queue.json)
+          echo "Writing $total tickets for spec #${SPEC}."
+
+          # A ticket's screenshots are /tmp/evidence/<position>-*.png. --attach
+          # uploads them and swaps each path in the body for its URL.
+          # nullglob: none means no --attach.
+          shopt -s nullglob
+
+          for i in $(seq 0 $((total - 1))); do
+            title=$(jq -r ".tickets[$i].title" /tmp/queue.json)
+            position=$(jq -r ".tickets[$i].position" /tmp/queue.json)
+            shape=$(jq -r ".tickets[$i].shape" /tmp/queue.json)
+            depends=$(jq -r ".tickets[$i].depends_on | join(\", \")" /tmp/queue.json)
+
+            # The two machine-read lines the survey parses
+            # (.sandcastle/agent-workflows/implement-spec/survey.ts). `#n` is
+            # the spec, in the Home repo, where this ticket lives too.
+            {
+              echo "Part of #${SPEC}"
+              echo ""
+              echo "Position: ${position}"
+              echo "Depends on: ${depends}"
+              echo "Shape: ${shape}"
+              echo ""
+              echo "---"
+              echo ""
+              jq -r ".tickets[$i].body" /tmp/queue.json
+            } > /tmp/ticket-body.md
+
+            attach=()
+            for png in /tmp/evidence/"${position}"-*.png; do attach+=(--attach "$png"); done
+
+            gh issue create -R "$HOME_REPO" \
+              --title "$title" \
+              --body-file /tmp/ticket-body.md \
+              --label "spec:${SPEC}" \
+              --label "agent:queued" \
+              --label "$repo_label" \
+              "${attach[@]}"
+          done
+
+          gh issue comment "$SPEC" -R "$HOME_REPO" --body \
+            "Decomposed in \`${GITHUB_REPOSITORY}\` into ${total} tickets, labelled \`spec:${SPEC}\` — [logs](${RUN_URL}). The chain takes it from here. <!-- factory:status -->"
+
+      - name: Park the spec on failure
+        # Without this the chain would decompose it again at once, forever.
+        if: failure() || cancelled()
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: |
+          gh label create "agent:blocked" -R "$HOME_REPO" --color B60205 \
+            --description "An agent run failed here. Its comment says how to retry" || true
+          gh issue edit "$SPEC" -R "$HOME_REPO" --add-label "agent:blocked" || true
+          gh issue comment "$SPEC" -R "$HOME_REPO" --body \
+            "Decompose run **${{ job.status }}** in \`${GITHUB_REPOSITORY}\` — [logs](${RUN_URL}). Parked. Take \`agent:blocked\` off to put the spec back in the queue. <!-- factory:status -->" || true
+
+      - name: Always remove in-progress
+        # After the park, so the survey never sees the spec free and unparked.
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: gh issue edit "$SPEC" -R "$HOME_REPO" --remove-label "agent:in-progress" || true
+
+      # ── THE CHAIN ── (see the header)
+      - name: Start the next ticket
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: |
+          set -euo pipefail
+          # The Home repo's default branch, never this run's ref.
+          ref="$(gh api "repos/$HOME_REPO" --jq .default_branch)"
+          echo "Spec #${SPEC}: asking the Home repo for the next ticket."
+          gh workflow run agent-implement-spec.yml -R "$HOME_REPO" --ref "$ref" \
+            -f spec_issue="$SPEC"
+
+  # ── LOOP TWO: build one ticket ────────────────────────────────────────────
+  # factory-implement.yml, plus the queue's bookkeeping. Every run pushes to a
+  # branch of its own: the run id is in the name.
+  build:
+    if: inputs.task == 'build'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    permissions:
+      contents: read # the Enrolled checkout. Everything else uses the App's token.
+
+    # The same group as factory-implement.yml: one build of a ticket at a
+    # time, whichever way it was asked for.
+    concurrency:
+      group: agent-implement-${{ inputs.ticket }}
+      cancel-in-progress: false
+
+    env:
+      SPEC: ${{ inputs.spec }}
+      TICKET: ${{ inputs.ticket }}
+      ENROLLED_REPO: ${{ github.repository }}
+      BRANCH: agent/spec-${{ inputs.spec }}-ticket-${{ inputs.ticket }}-${{ github.run_id }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Mint the Factory App's tokens
+        # Two, each for one repo (see WHAT IT NEEDS). It also sets HOME_REPO
+        # and says who the Factory's bot is.
+        id: factory
+        uses: trenddreamer/ship-it/.github/actions/factory-tokens@main
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          home-issues: write
+          home-contents: read
+          home-actions: write
+          enrolled-contents: write
+          enrolled-pull-requests: write
+
+      - name: Mark the ticket in progress
+        # The survey claimed it (`agent:queued` off, `agent:in-progress` on)
+        # before dispatching this run. This is for a run that waited.
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: |
+          set -euo pipefail
+          gh issue edit "$TICKET" -R "$HOME_REPO" \
+            --remove-label "agent:queued" --add-label "agent:in-progress"
+          gh issue comment "$TICKET" -R "$HOME_REPO" \
+            --body "Building in \`${ENROLLED_REPO}\` — [logs](${RUN_URL}). <!-- factory:status -->"
+
+      - name: Check out the Enrolled repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up the agent scripts from the Home repo
+        uses: trenddreamer/ship-it/.github/actions/factory-scripts@main
+        with:
+          home-repo: ${{ steps.factory.outputs.home-repo }}
+          token: ${{ steps.factory.outputs.home-token }}
+
+      - name: Install the Enrolled repo (the Contract's install)
+        env:
+          INSTALL: ${{ inputs.install }}
+        run: bash -euo pipefail -c "$INSTALL"
+
+      - name: Install the agent's tools
+        uses: trenddreamer/ship-it/.github/actions/agent-tools@main
+
+      - name: Seed the Enrolled repo (the Contract's seed)
+        env:
+          SEED: ${{ inputs.seed }}
+        run: bash -euo pipefail -c "$SEED"
+
+      - name: Open the branch
+        id: branch
+        env:
+          GIT_NAME: ${{ steps.factory.outputs.bot-login }}
+          GIT_EMAIL: ${{ steps.factory.outputs.bot-email }}
+        run: |
+          set -euo pipefail
+          git config user.name "$GIT_NAME"
+          git config user.email "$GIT_EMAIL"
+          git checkout -b "$BRANCH"
+          echo "base=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          # A repo that keeps its hooks with husky has them installed by its
+          # install. A repo with no .husky/ has no hook for this to check.
+          if [ -d .husky ] && [ "$(git config core.hooksPath)" != ".husky/_" ]; then
+            echo "::error::The pre-commit hook is not installed (core.hooksPath is '$(git config core.hooksPath)')."
+            exit 1
+          fi
+
+      - name: Read the ticket and its spec
+        # Only fetches; the next step filters, without the token. REST, for a
+        # bot's full `<slug>[bot]` login.
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: |
+          set -euo pipefail
+          gh issue view "$TICKET" -R "$HOME_REPO" --json number,title,body > /tmp/ticket.json
+          gh api --paginate "repos/$HOME_REPO/issues/$TICKET/comments" --jq '.[]' \
+            | jq -s . > /tmp/all-comments.json
+          gh issue view "$SPEC" -R "$HOME_REPO" --json number,title,body \
+            --jq '"# Spec: " + .title + "\n\n" + .body' > /tmp/spec.md
+
+      - name: Keep the comments that may steer the agent
+        # The same filter as factory-implement.yml:
+        # .sandcastle/agent-workflows/shared/steering-comments.ts, run from the
+        # Home repo's clone.
+        env:
+          FACTORY_BOT: ${{ steps.factory.outputs.bot-login }}
+        run: |
+          set -euo pipefail
+          factory="$RUNNER_TEMP/factory"
+          "$factory/node_modules/.bin/tsx" \
+            "$factory/.sandcastle/agent-workflows/shared/keep-steering-comments.ts" "$FACTORY_BOT" \
+            < /tmp/all-comments.json > /tmp/comments.json
+          rm /tmp/all-comments.json
+          jq -r --slurpfile comments /tmp/comments.json '
+            "# " + .title + "\n\n" + .body
+            + (if ($comments[0] | length) > 0
+               then "\n\n## Comments\n"
+                 + ([$comments[0][] | "\n### " + .author + " (" + .createdAt + ")\n\n" + .body + "\n"] | join(""))
+               else "" end)
+          ' /tmp/ticket.json > /tmp/ticket.md
+          cat /tmp/ticket.md
+
+      - name: Build the ticket
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CHECK: ${{ inputs.check }}
+        run: |
+          "$RUNNER_TEMP/factory/node_modules/.bin/tsx" \
+            "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/implement-spec/build.ts"
+
+      - name: Check the agent committed
+        # No commit, or uncommitted work, parks the ticket below rather than
+        # shipping an empty or partial PR.
+        env:
+          BASE: ${{ steps.branch.outputs.base }}
+        run: |
+          set -euo pipefail
+          commits=$(git rev-list --count "$BASE..HEAD")
+          if [ "$commits" -eq 0 ]; then
+            echo "::error::The agent finished #${TICKET} without committing anything."
+            git status --short
+            exit 1
+          fi
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::The agent left uncommitted changes on #${TICKET}. The PR would not contain them."
+            git status --short
+            exit 1
+          fi
+          git log --oneline "$BASE..HEAD"
+
+      - name: Check the work (the Contract's check)
+        # Red here means no pull request. This runs code the agent wrote, so
+        # it has no token.
+        env:
+          CHECK: ${{ inputs.check }}
+        run: bash -euo pipefail -c "$CHECK"
+
+      - name: Push
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+        run: |
+          set -euo pipefail
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c core.hooksPath=/dev/null \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            push "https://github.com/${ENROLLED_REPO}.git" "HEAD:refs/heads/${BRANCH}"
+
+      - name: Finish the pull request's body
+        # The agent's summary, then the footer: `Closes <Home>#<ticket>. Part
+        # of <Home>#<spec>.` See .sandcastle/agent-workflows/implement/pr-body.ts.
+        run: |
+          set -euo pipefail
+          touch /tmp/pr-body.md
+          node "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/implement/finish-pr-body.ts" \
+            "$HOME_REPO" "$TICKET" "$RUN_URL" "$SPEC" < /tmp/pr-body.md > /tmp/pr-body-final.md
+
+      - name: Open the draft pull request
+        id: pr
+        env:
+          # `--attach` with an App's token is still to be seen on a live run.
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          # The ticket's title is in the Home repo, read with its own token.
+          HOME_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: |
+          set -euo pipefail
+          title="$(GH_TOKEN="$HOME_TOKEN" gh issue view "$TICKET" -R "$HOME_REPO" --json title --jq .title)"
+          # Into the default branch: GitHub ignores `Closes` anywhere else.
+          base="$(gh repo view "$ENROLLED_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
+
+          shopt -s nullglob
+          attach=()
+          for png in /tmp/evidence/*.png; do attach+=(--attach "$png"); done
+
+          url="$(gh pr create \
+            -R "$ENROLLED_REPO" \
+            --draft \
+            --base "$base" \
+            --head "$BRANCH" \
+            --title "$title" \
+            --body-file /tmp/pr-body-final.md \
+            "${attach[@]}")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Hand the pull request to the reviewer
+        # Through the Home repo's routing job, as factory-implement.yml does.
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          set -euo pipefail
+          ref="$(gh api "repos/$HOME_REPO" --jq .default_branch)"
+          # No `|| true`: a chain that stopped here should go red.
+          gh workflow run agent-route.yml -R "$HOME_REPO" --ref "$ref" \
+            -f task=review -f ticket="$TICKET" -f pr="${PR_URL##*/}"
+
+      - name: Mark the ticket built, or park it
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+          JOB_STATUS: ${{ job.status }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          if [ -n "$PR_URL" ]; then
+            # Left open, `agent:built`. The pull request's `Closes` closes it
+            # on merge, and only then does what depends on it become
+            # buildable.
+            gh label create "agent:built" -R "$HOME_REPO" --color 0E8A16 \
+              --description "Built; waiting for its pull request to merge" || true
+            gh issue edit "$TICKET" -R "$HOME_REPO" --add-label "agent:built"
+            review=""
+            if [ "$JOB_STATUS" != "success" ]; then
+              review=" It was not handed to the reviewer: add \`agent:review\` to this Ticket to have it reviewed."
+            fi
+            gh issue comment "$TICKET" -R "$HOME_REPO" --body \
+              "Built and opened as a draft PR, ${PR_URL}, from \`${BRANCH}\` in \`${ENROLLED_REPO}\` — [logs](${RUN_URL}).${review} Tickets that depend on this one wait until it merges. If the PR is closed without merging, take \`agent:built\` off to build this ticket again. <!-- factory:status -->"
+          else
+            # Left open, and parked, so the queue moves past it and doesn't
+            # retry it forever.
+            gh label create "agent:blocked" -R "$HOME_REPO" --color B60205 \
+              --description "An agent run failed here. Its comment says how to retry" || true
+            gh issue edit "$TICKET" -R "$HOME_REPO" --add-label "agent:blocked"
+            gh issue comment "$TICKET" -R "$HOME_REPO" --body \
+              "The chain could not build this one (**${JOB_STATUS}**) in \`${ENROLLED_REPO}\` — [logs](${RUN_URL}). Left open and parked. The queue will skip past it. Take \`agent:blocked\` off to put it back in the queue. <!-- factory:status -->"
+          fi
+
+      - name: Always remove in-progress
+        # After built or blocked goes on, so the survey never sees the ticket
+        # free and still in the frontier.
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: gh issue edit "$TICKET" -R "$HOME_REPO" --remove-label "agent:in-progress" || true
+
+      # ── THE CHAIN ── (see the header)
+      - name: Start the next ticket
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: |
+          set -euo pipefail
+          ref="$(gh api "repos/$HOME_REPO" --jq .default_branch)"
+          echo "Spec #${SPEC}: asking the Home repo for the next ticket."
+          gh workflow run agent-implement-spec.yml -R "$HOME_REPO" --ref "$ref" \
+            -f spec_issue="$SPEC"

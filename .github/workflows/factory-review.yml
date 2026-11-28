@@ -1,0 +1,534 @@
+name: Factory — Review A Pull Request
+
+# The workflow in the software factory that reviews what implement built. A
+# shared workflow: it lives in the Home repo and runs inside the Enrolled repo
+# the pull request is in (ADR-0003).
+#
+# WHAT STARTS IT
+#   Nothing starts it on its own, and no event in the Enrolled repo can: no
+#   label on the pull request, no push. An Enrolled repo's caller workflow
+#   calls it (for the Marketplace, still in ship-it:
+#   .github/workflows/factory.yml), and the Home repo's routing job,
+#   .github/workflows/agent-route.yml, dispatches that caller with
+#   `task=review`, the Ticket, and the pull request if it knows it. The
+#   routing job is started two ways, both in the Home repo:
+#
+#     chained   implement, once it opens a pull request, dispatches the
+#               routing job with the Ticket and that pull request. So does
+#               the spec queue's build (factory-implement-spec.yml).
+#     by hand   the Owner puts `agent:review` on the Ticket, to review its
+#               pull request again, or when the chain's hand-off failed. The
+#               routing job doesn't know the pull request then, so this
+#               workflow finds it: the newest open pull request in the
+#               Enrolled repo that closes the Ticket
+#               (.sandcastle/agent-workflows/review/pull-request.ts).
+#
+#   Either way the routing job has routed the Ticket through the Registry and
+#   claimed it (`agent:review` off, `agent:in-progress` on) before this runs.
+#
+# THE POINT OF THIS FILE: IT IS MEMORY-LESS
+#   This workflow shares nothing with the implementer run. No session, no
+#   transcript, no scratch files, no "as we discussed". It starts from a cold
+#   checkout and three primary sources it fetches itself:
+#
+#     1. the diff              — what actually changed
+#     2. CODING_STANDARDS.md   — the rules, at the Enrolled repo's root
+#     3. the Ticket            — what was asked for, read from the Ticket in
+#                                the Home repo, not from the PR description
+#
+#   That independence is the whole value. An implementer that has argued
+#   itself into a shortcut will argue a reviewer that shares its context into
+#   the same shortcut. A reviewer that has never seen the argument cannot be.
+#   If you find yourself wanting to pass context from the build run into this
+#   one — that is the instinct to resist.
+#
+#   The agent itself is a Sandcastle script:
+#   .sandcastle/agent-workflows/review/review.ts, with its prompt next to it
+#   in prompt.md, run from the Home repo's clone with the Enrolled checkout
+#   as its working directory. The prompt hands it the code-review skill.
+#
+# IT FIXES WHAT IT CAN
+#   A review that only lists findings hands the work to a human. This one
+#   fixes every finding it can, as commits on the PR's branch, and leaves the
+#   rest as inline comments on their file and line. The workflow pushes the
+#   commits to the Enrolled repo, never forced. If someone pushed to the
+#   branch during the run, GitHub rejects the push, and the commits go to a
+#   new branch in the Enrolled repo, `<pr branch>-<run id>`, opened as a draft
+#   PR against the same base. The original PR and the Ticket get
+#   `agent:blocked`, because a person has to pick which to keep.
+#
+# HOW IT ENDS
+#   The verdict goes on the pull request, and the Ticket gets a comment that
+#   links to the verdict and to this run. The implementer opens every PR as a
+#   draft, meaning "nobody has read this yet". Once a verdict is posted,
+#   somebody has, so the PR is marked ready for review, on a fail as well as
+#   a pass. Ready is not approved. A failing verdict (CHANGES REQUESTED on
+#   either axis, .sandcastle/agent-workflows/review/verdict.ts) labels the
+#   Ticket and the PR `agent:blocked`: a person reads it, and the merge is
+#   still a human's.
+#
+# WHICH REPO IS WHICH
+#   `github.repository` (ENROLLED_REPO) is where the PR is, where the code is
+#   checked out and pushed, and where the run page lives. The Ticket is in
+#   the Home repo, HOME_REPO, and every `gh` call about it says so.
+#
+# WHAT IT NEEDS (passed by the caller, never inherited)
+#   inputs.ticket — the Ticket's number in the Home repo.
+#   inputs.pr — the pull request's number in the Enrolled repo, or empty to
+#     find it from the Ticket.
+#   inputs.install, inputs.seed, inputs.check — the Enrolled repo's Contract.
+#     Install and seed run before the agent; the prompt names check, the
+#     checks each of its fixes must pass.
+#   secrets.CLAUDE_CODE_OAUTH_TOKEN — the agent's auth token.
+#   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory
+#     App (ADR-0004). The job's first step, .github/actions/factory-tokens,
+#     mints two tokens from them, and only its mint steps see the key. Both
+#     are new for this run and revoked when the job ends. A token's
+#     permissions apply to every repo it covers, so each covers one repo:
+#       home       the Home repo only. Issues: read/write (the Ticket's
+#                  labels and comments) and Contents: read (to clone the
+#                  agent scripts).
+#       enrolled   this Enrolled repo only. Contents and Pull requests:
+#                  read/write, to push the review's commits, post the verdict
+#                  and inline comments, and label the PR.
+#     While the Marketplace is still in ship-it, both cover ship-it. Once it
+#     moves out, nothing in this run can write the Home repo's code.
+#     Neither has Actions: a review run cannot start or dispatch any
+#     workflow, not even the routing job. Nor Workflows: a fix that touches
+#     `.github/workflows/` is refused at the push.
+#     Only the steps that call GitHub get a token; the agent's step does
+#     not. Keeping it out of the agent's environment is tidiness, not a wall:
+#     the agent shares the machine with the steps that push and post. The
+#     real defence is who can reach the agent: a pull request from the
+#     Enrolled repo itself, never a fork, for a Ticket only a collaborator or
+#     the Factory can send to review.
+#   secrets.GITHUB_TOKEN — supplied by Actions, used only for the checkout.
+
+on:
+  workflow_call:
+    inputs:
+      ticket:
+        description: The Ticket's number in the Home repo.
+        type: string
+        required: true
+      pr:
+        description: The pull request's number in the Enrolled repo. Empty to find it from the Ticket.
+        type: string
+        required: false
+        default: ""
+      install:
+        description: The Contract's install command, run at the Enrolled repo's root.
+        type: string
+        required: true
+      seed:
+        description: The Contract's seed command, run after install.
+        type: string
+        required: true
+      check:
+        description: The Contract's check command, which each of the review's fixes must pass.
+        type: string
+        required: true
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      FACTORY_APP_ID:
+        required: true
+      FACTORY_APP_PRIVATE_KEY:
+        required: true
+
+# HOME_REPO, where the Ticket lives and the agent scripts come from, is set
+# for the job by its first step, .github/actions/factory-tokens.
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    permissions:
+      contents: read # the Enrolled checkout. Everything else uses the App's token.
+
+    # One review per Ticket at a time, never cancelled: a cancelled review
+    # would lose the commits it made. A second review waits for the one
+    # running. On the job, not the workflow: a called workflow's own
+    # top-level group isn't documented. GitHub keeps one waiting run per
+    # group, so a third bumps the second; all are for this one Ticket, and
+    # the run that goes ends by taking `agent:in-progress` off it.
+    concurrency:
+      group: agent-review-${{ inputs.ticket }}
+      cancel-in-progress: false
+
+    env:
+      TICKET: ${{ inputs.ticket }}
+      ENROLLED_REPO: ${{ github.repository }}
+      # The run page lives in the Enrolled repo (ADR-0003).
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Mint the Factory App's tokens
+        # First, and the only step that sees the private key. Two tokens,
+        # each for one repo (see WHAT IT NEEDS), and no Actions on either: a
+        # review never dispatches anything. It also sets HOME_REPO and says
+        # who the Factory's bot is.
+        id: factory
+        uses: trenddreamer/ship-it/.github/actions/factory-tokens@main
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          home-issues: write
+          home-contents: read
+          enrolled-contents: write
+          enrolled-pull-requests: write
+
+      - name: Mark the Ticket in progress
+        # The routing job claimed the Ticket before it dispatched this run.
+        # A run that waited behind another, or one chained from an implement
+        # run that took the label off as it ended, finds it gone, so it goes
+        # back on.
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: gh issue edit "$TICKET" -R "$HOME_REPO" --add-label "agent:in-progress"
+
+      - name: Set up the agent scripts from the Home repo
+        # Cloned into $RUNNER_TEMP/factory, outside the workspace, so the
+        # agent's `git status` never sees them, with Node 22 and their
+        # dependencies. See .github/actions/factory-scripts.
+        uses: trenddreamer/ship-it/.github/actions/factory-scripts@main
+        with:
+          home-repo: ${{ steps.factory.outputs.home-repo }}
+          token: ${{ steps.factory.outputs.home-token }}
+
+      - name: Find the pull request
+        # The one the routing job named, or, when the Owner asked from the
+        # Ticket, the newest open one here that closes the Ticket. Plain
+        # `node` runs the script: it needs nothing installed.
+        id: pr
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          PR_INPUT: ${{ inputs.pr }}
+        run: |
+          set -euo pipefail
+          number="$PR_INPUT"
+          if [ -z "$number" ]; then
+            gh pr list -R "$ENROLLED_REPO" --state open --limit 100 --json number,body \
+              > /tmp/open-prs.json
+            number="$(node "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/review/find-pull-request.ts" \
+              "$HOME_REPO" "$ENROLLED_REPO" "$TICKET" < /tmp/open-prs.json)"
+          fi
+          gh pr view "$number" -R "$ENROLLED_REPO" \
+            --json number,url,state,isCrossRepository,headRefName,baseRefName,headRefOid \
+            > /tmp/pr.json
+          # A pull request from a fork is a stranger's code. It is never
+          # reviewed with a writable token.
+          if [ "$(jq -r .isCrossRepository /tmp/pr.json)" = "true" ]; then
+            echo "::error::Pull request #${number} comes from a fork. The Factory doesn't review those."
+            exit 1
+          fi
+          if [ "$(jq -r .state /tmp/pr.json)" != "OPEN" ]; then
+            echo "::error::Pull request #${number} is not open."
+            exit 1
+          fi
+          {
+            echo "number=$(jq -r .number /tmp/pr.json)"
+            echo "url=$(jq -r .url /tmp/pr.json)"
+            echo "branch=$(jq -r .headRefName /tmp/pr.json)"
+            echo "base=$(jq -r .baseRefName /tmp/pr.json)"
+            echo "sha=$(jq -r .headRefOid /tmp/pr.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mark the pull request in progress
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          # A fresh Enrolled repo does not have these labels yet.
+          gh label create "agent:in-progress" -R "$ENROLLED_REPO" --color FBCA04 \
+            --description "An agent is working on this right now" || true
+          gh label create "agent:blocked" -R "$ENROLLED_REPO" --color B60205 \
+            --description "An agent run failed here. Its comment says how to retry" || true
+          gh pr edit "$PR_NUMBER" -R "$ENROLLED_REPO" --remove-label "agent:blocked" || true
+          gh pr edit "$PR_NUMBER" -R "$ENROLLED_REPO" --add-label "agent:in-progress"
+
+      - name: Checkout the pull request
+        uses: actions/checkout@v4
+        with:
+          # The PR's head, so the review's fixes are commits on top of it.
+          # Full history: the review diffs it against the base.
+          ref: ${{ steps.pr.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Read the Ticket
+        # The spec: the Ticket in the Home repo, never the PR description.
+        # 1. The diff: the agent takes it against `origin/<base>`, the base as
+        #    it is now, three-dot, so anything pushed to the base since the
+        #    PR opened is not blamed on the PR.
+        # 2. The standards: CODING_STANDARDS.md, in the checkout.
+        # 3. The spec: this.
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+        run: |
+          set -euo pipefail
+          gh issue view "$TICKET" -R "$HOME_REPO" --json number,title,body \
+            --jq '"# Ticket '"$HOME_REPO"'#" + (.number|tostring) + ": " + .title + "\n\n" + .body' \
+            > /tmp/review-spec.md
+          cat /tmp/review-spec.md
+
+      - name: Install the Enrolled repo (the Contract's install)
+        # Through env, never pasted into the script: the Contract is text.
+        env:
+          INSTALL: ${{ inputs.install }}
+        run: bash -euo pipefail -c "$INSTALL"
+
+      - name: Install the agent's tools
+        # Claude Code, Matt Pocock's skills and agent-browser.
+        uses: trenddreamer/ship-it/.github/actions/agent-tools@main
+
+      - name: Seed the Enrolled repo (the Contract's seed)
+        # The pre-commit hook runs on every commit the agent makes, and the
+        # repo's checks may need a database.
+        env:
+          SEED: ${{ inputs.seed }}
+        run: bash -euo pipefail -c "$SEED"
+
+      - name: Open the branch
+        env:
+          GIT_NAME: ${{ steps.factory.outputs.bot-login }}
+          GIT_EMAIL: ${{ steps.factory.outputs.bot-email }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git config user.name "$GIT_NAME"
+          git config user.email "$GIT_EMAIL"
+          git checkout -B "$BRANCH"
+          # A repo that keeps its hooks with husky has them installed by its
+          # install, which points git at .husky/_. If that didn't happen, the
+          # agent's commits would skip the hook without anyone noticing.
+          if [ -d .husky ] && [ "$(git config core.hooksPath)" != ".husky/_" ]; then
+            echo "::error::The pre-commit hook is not installed (core.hooksPath is '$(git config core.hooksPath)')."
+            exit 1
+          fi
+
+      - name: Review the pull request
+        # The script and its prompt come from the Home repo's clone; the
+        # working directory is the Enrolled checkout.
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OUTPUT_DIR: ${{ runner.temp }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
+          BASE_REF: ${{ steps.pr.outputs.base }}
+          CHECK: ${{ inputs.check }}
+        run: |
+          "$RUNNER_TEMP/factory/node_modules/.bin/tsx" \
+            "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/review/review.ts"
+
+      - name: Push the review's fixes
+        id: push
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
+          HEAD_SHA: ${{ steps.pr.outputs.sha }}
+          # Where the fixes go if the push to BRANCH is rejected. New every run.
+          FALLBACK_BRANCH: ${{ steps.pr.outputs.branch }}-${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::warning::The review left uncommitted changes. Only its commits are pushed."
+            git status --short
+          fi
+          if [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ]; then
+            echo "The review made no commits. Nothing to push."
+            exit 0
+          fi
+          git log --oneline "$HEAD_SHA..HEAD"
+          # The token exists for these commands. Hooks are off, so nothing
+          # the PR or the agent wrote runs while it does.
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          push_to() {
+            git -c core.hooksPath=/dev/null \
+              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+              push "https://github.com/${ENROLLED_REPO}.git" "HEAD:refs/heads/$1"
+          }
+          # Not a force push: if someone pushed to the branch during the run,
+          # this is rejected.
+          if push_to "$BRANCH"; then
+            exit 0
+          fi
+          # Rejected. Never force it, and never lose the fixes: push them to a
+          # branch of their own in the Enrolled repo, which this run's id
+          # makes new.
+          echo "::warning::The push to $BRANCH was rejected. Pushing the fixes to $FALLBACK_BRANCH instead."
+          push_to "$FALLBACK_BRANCH"
+          echo "fallback=true" >> "$GITHUB_OUTPUT"
+          echo "branch=$FALLBACK_BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Open a pull request for the rejected push
+        id: fallback
+        if: steps.push.outputs.fallback == 'true'
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
+          BASE_REF: ${{ steps.pr.outputs.base }}
+          FALLBACK_BRANCH: ${{ steps.push.outputs.branch }}
+        run: |
+          set -euo pipefail
+          # It stands in for #PR_NUMBER, against the same base, so whichever
+          # of the two the Owner merges into the default branch must close
+          # the Ticket: into the default branch it carries the same
+          # cross-repo `Closes`. Into another branch GitHub ignores closing
+          # keywords, so the body says which pull request has to close it.
+          # A bare `#n` here is a pull request in this, the Enrolled, repo.
+          # The rule and its tests: .sandcastle/agent-workflows/review/fallback-body.ts.
+          default="$(gh repo view "$ENROLLED_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
+          node "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/review/write-fallback-body.ts" \
+            "$HOME_REPO" "$TICKET" "$PR_NUMBER" "$BRANCH" "$BASE_REF" "$default" "$RUN_URL" \
+            > /tmp/review-fallback.md
+          url="$(gh pr create \
+            -R "$ENROLLED_REPO" \
+            --draft \
+            --base "$BASE_REF" \
+            --head "$FALLBACK_BRANCH" \
+            --title "$(gh pr view "$PR_NUMBER" -R "$ENROLLED_REPO" --json title --jq .title) (review run ${{ github.run_id }})" \
+            --body-file /tmp/review-fallback.md)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "number=${url##*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Post the verdict on the pull request
+        id: verdict
+        if: always() && steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          BRANCH: ${{ steps.pr.outputs.branch }}
+          FALLBACK: ${{ steps.push.outputs.fallback }}
+          FALLBACK_BRANCH: ${{ steps.push.outputs.branch }}
+          FALLBACK_URL: ${{ steps.fallback.outputs.url }}
+        run: |
+          set -euo pipefail
+          [ -s /tmp/review-verdict.md ] || \
+            echo "The review run produced no verdict. See the logs. Add \`agent:review\` to its Ticket to retry." \
+              > /tmp/review-verdict.md
+          if [ "$FALLBACK" = "true" ]; then
+            {
+              echo ""
+              echo "The push of this review's fixes to \`$BRANCH\` was **rejected**: the branch moved during this run. Nothing was force-pushed."
+              echo "The fixes are on \`$FALLBACK_BRANCH\`${FALLBACK_URL:+, opened as ${FALLBACK_URL}}. Labelled \`agent:blocked\`: keep one of the two PRs."
+            } >> /tmp/review-verdict.md
+          fi
+          {
+            echo ""
+            echo "---"
+            echo ""
+            echo "Reviewed by the Factory's review workflow, for ${HOME_REPO}#${TICKET} — [logs](${RUN_URL})."
+            echo "This run saw the diff, the standards and the Ticket, and nothing else."
+          } >> /tmp/review-verdict.md
+          # Uploads the agent's screenshots and swaps each /tmp/evidence path
+          # in the body for its URL. nullglob: none means no --attach.
+          shopt -s nullglob
+          attach=()
+          for png in /tmp/evidence/*.png; do attach+=(--attach "$png"); done
+          # gh prints the new comment's URL: the Ticket links to it.
+          url="$(gh pr comment "$PR_NUMBER" -R "$ENROLLED_REPO" \
+            --body-file /tmp/review-verdict.md "${attach[@]}")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Post the inline comments
+        # One review, event COMMENT, with a comment on each line the agent
+        # left a finding on. They go where the fixes went: the fallback PR if
+        # the push was rejected. review.ts already dropped every comment
+        # outside the diff, because GitHub rejects the whole review for one.
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          TARGET: ${{ steps.fallback.outputs.number || steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          review="$RUNNER_TEMP/review-comments.json"
+          if [ "$(jq '.comments | length' "$review")" -eq 0 ]; then
+            echo "No inline comments: the review fixed or passed everything."
+            exit 0
+          fi
+          gh api --method POST "repos/$ENROLLED_REPO/pulls/$TARGET/reviews" \
+            --input "$review" --silent
+
+      - name: Read the verdict
+        # pass, changes-requested, or none when the run wrote no verdict.
+        # This reads the verdict as text, and runs nothing the agent or the PR
+        # wrote. The rule and its tests: .sandcastle/agent-workflows/review/verdict.ts.
+        id: outcome
+        if: always() && steps.verdict.outcome == 'success'
+        run: |
+          set -euo pipefail
+          outcome="$(node "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/review/verdict-outcome.ts" \
+            < /tmp/review-verdict.md)"
+          echo "Verdict: $outcome"
+          echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
+
+      - name: Mark the pull request ready
+        # No `always()` here. If the agent broke, nobody has read the PR, so
+        # it stays a draft. And it goes ready only when a real verdict was
+        # posted, pass or fail: the no-verdict note is not a review.
+        if: steps.outcome.outputs.outcome == 'pass' || steps.outcome.outputs.outcome == 'changes-requested'
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: gh pr ready "$PR_NUMBER" -R "$ENROLLED_REPO"
+
+      - name: Mark blocked on a failing verdict, a failure or a rejected push
+        # A failing verdict is for a person to read. A rejected push is
+        # blocked too: the fixes are on another branch, and a person has to
+        # choose between the two PRs. Both the Ticket and the PR say so.
+        if: >-
+          failure() || steps.push.outputs.fallback == 'true'
+          || steps.outcome.outputs.outcome == 'changes-requested'
+        env:
+          # The Ticket with the Home repo's token, the PR with this repo's.
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+          ENROLLED_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          gh label create "agent:blocked" -R "$HOME_REPO" --color B60205 \
+            --description "An agent run failed here. Its comment says how to retry" || true
+          gh issue edit "$TICKET" -R "$HOME_REPO" --add-label "agent:blocked" || true
+          [ -z "$PR_NUMBER" ] || GH_TOKEN="$ENROLLED_TOKEN" \
+            gh pr edit "$PR_NUMBER" -R "$ENROLLED_REPO" --add-label "agent:blocked" || true
+
+      - name: Report back on the Ticket
+        # On the Ticket in the Home repo, with full links: a bare `#n` there
+        # would point at the Home repo's own pull requests.
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+          JOB_STATUS: ${{ job.status }}
+          OUTCOME: ${{ steps.outcome.outputs.outcome }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+          VERDICT_URL: ${{ steps.verdict.outputs.url }}
+          FALLBACK_URL: ${{ steps.fallback.outputs.url }}
+        run: |
+          case "$OUTCOME" in
+            pass) said="**passed**" ;;
+            changes-requested) said="**changes requested**, labelled \`agent:blocked\` for a person to read" ;;
+            *) said="**${JOB_STATUS}**, with no verdict" ;;
+          esac
+          if [ -z "$PR_URL" ]; then
+            body="Review run **${JOB_STATUS}**: it found no open pull request in \`${ENROLLED_REPO}\` to review for this Ticket — [logs](${RUN_URL}). Add \`agent:review\` to this Ticket to retry once it has one."
+          else
+            body="Review of ${PR_URL}: ${said}."
+            [ -n "$VERDICT_URL" ] && body+=" [The verdict](${VERDICT_URL})."
+            body+=" [Logs](${RUN_URL})."
+            [ -n "$FALLBACK_URL" ] && body+=" The fixes could not be pushed to its branch, so they are in ${FALLBACK_URL}: keep one of the two."
+            [ "$JOB_STATUS" = "failure" ] && body+=" Add \`agent:review\` to this Ticket to retry."
+          fi
+          # Tagged, so the next run on this Ticket leaves it out of the Ticket.
+          gh issue comment "$TICKET" -R "$HOME_REPO" --body "${body} <!-- factory:status -->"
+
+      - name: Always remove in-progress
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.factory.outputs.home-token }}
+          ENROLLED_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        run: |
+          gh issue edit "$TICKET" -R "$HOME_REPO" --remove-label "agent:in-progress" || true
+          [ -z "$PR_NUMBER" ] || GH_TOKEN="$ENROLLED_TOKEN" \
+            gh pr edit "$PR_NUMBER" -R "$ENROLLED_REPO" --remove-label "agent:in-progress" || true

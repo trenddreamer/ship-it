@@ -1,0 +1,115 @@
+# The caller workflow for an Enrolled repo. Copy this file to the Enrolled
+# repo as `.github/workflows/factory.yml`, on its default branch, and change
+# only the Contract below: the three `install`, `seed` and `check` lines in
+# each job. See docs/enrolment/README.md in the Home repo, trenddreamer/ship-it.
+#
+# The file name matters: the Home repo's routing job starts this workflow as
+# `factory.yml`, on the repo's default branch. Nothing in the Enrolled repo
+# starts it.
+#
+# THE CONTRACT
+#   install   installs the repo from a fresh checkout, e.g. `npm ci`. The
+#             runner is ubuntu-latest with Node 22 already set up; install
+#             anything else the repo needs here.
+#   seed      sets up and seeds its database, after install. Use `true` if
+#             the repo has none.
+#   check     the checks a change must pass, e.g. `npm run check`.
+#
+# SECRETS
+#   Set with scripts/set-factory-secrets.sh in the Home repo. Passed one by
+#   one, never inherited, so the Factory gets these three and none of the
+#   repo's other secrets.
+
+name: Factory
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: The Factory's task.
+        type: choice
+        options: [explore, implement, review, decompose, build]
+        required: true
+      tickets:
+        description: For explore, the Tickets in the Home repo, as a JSON array, e.g. `[12, 13]`.
+        type: string
+        required: false
+      ticket:
+        description: For implement, review and build, the Ticket's number in the Home repo.
+        type: string
+        required: false
+      pr:
+        description: For review, the pull request's number in this repo. Empty to find it from the Ticket.
+        type: string
+        required: false
+      spec:
+        description: For decompose and build, the spec's number in the Home repo.
+        type: string
+        required: false
+
+# The built-in token gets nothing unless a job asks for it.
+permissions: {}
+
+jobs:
+  explore:
+    if: inputs.task == 'explore'
+    uses: trenddreamer/ship-it/.github/workflows/factory-explore.yml@main
+    permissions:
+      contents: read
+    with:
+      tickets: ${{ inputs.tickets }}
+      install: npm ci # the Contract
+      seed: npm run db:migrate && npm run db:seed # the Contract
+      check: npm run check # the Contract
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+
+  implement:
+    if: inputs.task == 'implement'
+    uses: trenddreamer/ship-it/.github/workflows/factory-implement.yml@main
+    permissions:
+      contents: read
+    with:
+      ticket: ${{ inputs.ticket }}
+      install: npm ci # the Contract
+      seed: npm run db:migrate && npm run db:seed # the Contract
+      check: npm run check # the Contract
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+
+  review:
+    if: inputs.task == 'review'
+    uses: trenddreamer/ship-it/.github/workflows/factory-review.yml@main
+    permissions:
+      contents: read
+    with:
+      ticket: ${{ inputs.ticket }}
+      pr: ${{ inputs.pr }}
+      install: npm ci # the Contract
+      seed: npm run db:migrate && npm run db:seed # the Contract
+      check: npm run check # the Contract
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+
+  implement-spec:
+    if: inputs.task == 'decompose' || inputs.task == 'build'
+    uses: trenddreamer/ship-it/.github/workflows/factory-implement-spec.yml@main
+    permissions:
+      contents: read
+    with:
+      task: ${{ inputs.task }}
+      spec: ${{ inputs.spec }}
+      ticket: ${{ inputs.ticket }}
+      install: npm ci # the Contract
+      seed: npm run db:migrate && npm run db:seed # the Contract
+      check: npm run check # the Contract
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      FACTORY_APP_ID: ${{ secrets.FACTORY_APP_ID }}
+      FACTORY_APP_PRIVATE_KEY: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}

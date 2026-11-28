@@ -1,0 +1,385 @@
+name: Agent — Route The Tickets
+
+# The routing job: the Home repo's half of every Factory run (ADR-0002,
+# ADR-0003). The Home repo holds the Tickets and routes them; the work runs
+# inside the Enrolled repo each Ticket is for. This workflow routes, claims
+# and dispatches, and runs no agent and no code from any Enrolled repo.
+#
+# EXPLORE
+#   Someone puts `agent:explore` on a Ticket. The run then ignores which
+#   Ticket that was, and takes every open `agent:explore` Ticket:
+#
+#     route      each Ticket through the Registry, repos.yml. One with no
+#                `repo:` label, more than one, or one the Registry doesn't
+#                list is refused: one comment with the reason, `agent:explore`
+#                off, `agent:blocked` on. See .github/actions/route-tickets.
+#     batch      the rest, grouped by Enrolled repo, so a batch only ever
+#                holds Tickets for one repo. See
+#                .sandcastle/agent-workflows/route/batch.ts.
+#     dispatch   one job per batch: claim its Tickets (`agent:explore` off,
+#                `agent:in-progress` on), then start the Enrolled repo's
+#                caller workflow, factory.yml, with `task=explore` and the
+#                batch. The claim comes first, so a run that starts before
+#                that one does never takes the same Tickets.
+#
+#   Batches for different Enrolled repos are dispatched side by side, and
+#   their runs never wait on each other.
+#
+# IMPLEMENT
+#   Someone puts `agent:implement` on a Ticket: the Owner, or explore's apply
+#   job when it called the Ticket an easy call. The same jobs run, on that
+#   one Ticket, if it is still open and still labelled when the run starts:
+#   route it, claim it (`agent:implement` off, `agent:in-progress` on), and
+#   start factory.yml in its Enrolled repo with `task=implement` and
+#   `ticket=<n>`. Implement never starts any other way: no event in an
+#   Enrolled repo starts it.
+#
+# REVIEW
+#   Two ways in, both here in the Home repo, because no event in an Enrolled
+#   repo reaches it (ADR-0002):
+#
+#     chained   implement, once it has opened a pull request, dispatches this
+#               workflow with `task=review`, the Ticket and the pull request.
+#               So does the spec queue's build. No label on the pull request
+#               is involved.
+#     by hand   the Owner puts `agent:review` on the Ticket, to have its pull
+#               request reviewed (again). The pull request isn't named then:
+#               the review run finds the Ticket's newest open one.
+#
+#   Either way, the same jobs run on that one Ticket, if it is still open
+#   (and, by hand, still labelled): route it, claim it (`agent:review` off,
+#   `agent:in-progress` on), and start factory.yml in its Enrolled repo with
+#   `task=review`, `ticket=<n>` and `pr=<n>` if it was given. The review runs
+#   in the Enrolled repo, factory-review.yml.
+#
+# THE SPEC QUEUE
+#   The spec queue's survey, agent-implement-spec.yml, dispatches this
+#   workflow, never a label:
+#
+#     decompose   `ticket` is the spec. Decompose runs in its Enrolled repo
+#                 and writes the queue's tickets into the Home repo.
+#     build       `ticket` is the frontier ticket, `spec` its spec.
+#
+#   The survey has claimed the spec or ticket (`agent:in-progress`) before
+#   it dispatches this, so the cron never hands it out twice. The same jobs
+#   run: route it, and start factory.yml in its Enrolled repo with
+#   `task=decompose` or `task=build`. A refused or undispatched one loses
+#   `agent:in-progress` and is parked (`agent:blocked`), which the queue
+#   skips; taking `agent:blocked` off puts it back.
+#
+# TOKENS
+#   Factory App tokens (ADR-0004), each minted in its job's first steps, the
+#   only steps that see the private key. A token's permissions apply to every
+#   repo it covers, so each covers one repo:
+#     route      the Home repo only (the default with no `owner` or
+#                `repositories`), with Issues: read/write. It reads, refuses
+#                and nothing else.
+#     dispatch   two per batch. The Home repo's, with Issues: read/write, to
+#                claim the Tickets. That batch's Enrolled repo's, with
+#                Actions: read/write and nothing else, to dispatch the run.
+#                The second is minted per batch, after routing, because the
+#                repo it covers is the one the Registry named. Neither can
+#                start a run in the other's repo. While the Marketplace is
+#                still in ship-it, both cover ship-it.
+#   A run the App's token dispatches starts; GitHub only holds back runs the
+#   built-in GITHUB_TOKEN would start.
+#
+# WHAT IT NEEDS
+#   secrets.FACTORY_APP_ID, secrets.FACTORY_APP_PRIVATE_KEY — the Factory App.
+#   The Factory App installed on every repo in the Registry, and each one's
+#     caller workflow, factory.yml, on its default branch.
+#   The `agent:explore`, `agent:implement` and `agent:review` labels. A fresh clone of this
+#     repository does not have them, and no workflow can create the label
+#     that starts it. Create them once:
+#       gh label create "agent:explore" --color 5319E7 \
+#         --description "The factory explores this ticket"
+#       gh label create "agent:implement" --color 5319E7 \
+#         --description "Hand this issue to the implementer agent"
+#       gh label create "agent:review" --color 5319E7 \
+#         --description "Ask the review workflow to read this Ticket's pull request"
+
+on:
+  issues:
+    types: [labeled]
+  # How a Factory run chains review, and how the spec queue starts its work:
+  # implement's, build's and the survey's tokens have Actions: write to
+  # dispatch this, and nothing in the Enrolled repo has to start it. Anyone
+  # with write access to the Home repo can dispatch it too.
+  workflow_dispatch:
+    inputs:
+      task:
+        description: The Factory's task.
+        type: choice
+        options: [review, decompose, build]
+        required: true
+      ticket:
+        description: The Ticket's number. For decompose, the spec's.
+        type: string
+        required: true
+      pr:
+        description: For review, the pull request's number in the Ticket's Enrolled repo. Empty to find it from the Ticket.
+        type: string
+        required: false
+      spec:
+        description: For decompose and build, the spec's number.
+        type: string
+        required: false
+
+# One explore routing run at a time, and one routing run per task and Ticket
+# for the rest, never cancelled. A label that lands mid-run queues one more run
+# behind this one, which lists the Tickets again when it starts. The Tickets
+# this run took are `agent:in-progress` by then, so nothing is taken twice
+# and nothing is lost. GitHub keeps one queued run per group, and bumps an
+# older one for a newer; a bumped run has claimed nothing, so that loses
+# nothing either. Every other label gets a throwaway group of its own, so it
+# can never bump a queued run.
+#
+# These groups, with the trigger label coming off at the claim, are what
+# stop a runaway chain: a Ticket is built again only when the label goes
+# back on.
+concurrency:
+  group: >-
+    ${{ github.event.label.name == 'agent:explore' && 'agent-route-explore'
+    || github.event.label.name == 'agent:implement' && format('agent-route-implement-{0}', github.event.issue.number)
+    || github.event.label.name == 'agent:review' && format('agent-route-review-{0}', github.event.issue.number)
+    || github.event_name == 'workflow_dispatch' && format('agent-route-{0}-{1}', inputs.task, inputs.ticket)
+    || format('ignore-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  route:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.label.name == 'agent:explore'
+      || github.event.label.name == 'agent:implement'
+      || github.event.label.name == 'agent:review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read # the sparse checkout. The Tickets are read with the App's token.
+
+    outputs:
+      batches: ${{ steps.batch.outputs.batches || '[]' }}
+
+    env:
+      GH_REPO: ${{ github.repository }}
+      # The label that started the run, or, when dispatched, the label that
+      # would have: a refused Ticket loses it, and re-adding it retries.
+      TRIGGER: ${{ github.event.label.name || format('agent:{0}', inputs.task) }}
+      ISSUE_NUMBER: ${{ github.event.issue.number || inputs.ticket }}
+      DISPATCHED: ${{ github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Mint the Factory App's token
+        # The Home repo only, Issues: read/write: enough to read the Tickets
+        # and refuse the ones the Registry can't route.
+        id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-issues: write
+
+      - name: Checkout the Registry and the routing code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            repos.yml
+            .github/actions
+            .sandcastle/agent-workflows/route
+
+      - name: List the open Tickets
+        id: open
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          set -euo pipefail
+          if [ "$TRIGGER" = "agent:explore" ]; then
+            # Explore takes every open `agent:explore` Ticket, not just the
+            # one that was labelled. Labels often go on several at once. Let
+            # them all land.
+            sleep 5
+            numbers="$(gh issue list --state open --label "agent:explore" --limit 100 \
+              --json number --jq '[.[].number] | sort')"
+          elif [ "$DISPATCHED" = "true" ]; then
+            # A chained review, or the spec queue's decompose or build: the
+            # Ticket that was named, if it is still open. A dispatched Ticket
+            # carries no trigger label.
+            if ! [[ "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+              echo "::error::The ticket input must be a number."
+              exit 1
+            fi
+            numbers="$(gh issue view "$ISSUE_NUMBER" --json number,state --jq \
+              'if .state == "OPEN" then [.number] else [] end')"
+          else
+            # Implement, or review by hand, takes the Ticket that was
+            # labelled, if it is still open and still has the label: a run
+            # queued behind another may find it closed, or the label taken
+            # off again.
+            numbers="$(gh issue view "$ISSUE_NUMBER" --json number,state,labels \
+              | jq -c --arg trigger "$TRIGGER" \
+                'if .state == "OPEN" and any(.labels[]; .name == $trigger)
+                 then [.number] else [] end')"
+          fi
+          echo "numbers=$numbers" >> "$GITHUB_OUTPUT"
+
+      - name: Route the Tickets
+        # Leaves each Ticket's route in $RUNNER_TEMP/route/routes.json. It
+        # sets up Node 22 itself, which the next step uses too.
+        id: route
+        if: steps.open.outputs.numbers != '[]'
+        uses: ./.github/actions/route-tickets
+        with:
+          tickets: ${{ steps.open.outputs.numbers }}
+          trigger: ${{ github.event.label.name || format('agent:{0}', inputs.task) }}
+          # The spec queue's survey claimed the Ticket and skips it while it
+          # is parked; re-adding a label means nothing to it.
+          retry: ${{ (inputs.task == 'decompose' || inputs.task == 'build') && 'Then take `agent:blocked` off to put it back in the queue.' || '' }}
+          token: ${{ steps.app.outputs.token }}
+
+      - name: Batch the Tickets by Enrolled repo
+        # Implement's and review's one Ticket makes one batch of one.
+        id: batch
+        if: steps.route.outputs.routed != '' && steps.route.outputs.routed != '[]'
+        # Plain `node` runs the .ts file: the route action's setup-node put
+        # Node 22 on the PATH, current enough (22.18+) to strip types by
+        # default, so the script needs no `npm ci`.
+        run: |
+          set -euo pipefail
+          node .sandcastle/agent-workflows/route/batch-tickets.ts \
+            < "$RUNNER_TEMP/route/routes.json" > "$RUNNER_TEMP/route/batches.json"
+          jq -c '.[]' "$RUNNER_TEMP/route/batches.json"
+          echo "batches=$(jq -c . "$RUNNER_TEMP/route/batches.json")" >> "$GITHUB_OUTPUT"
+
+  dispatch:
+    needs: route
+    if: needs.route.outputs.batches != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # No checkout, so the GITHUB_TOKEN gets nothing.
+    permissions: {}
+
+    strategy:
+      # One Enrolled repo's trouble doesn't hold up the others' batches.
+      fail-fast: false
+      matrix:
+        batch: ${{ fromJSON(needs.route.outputs.batches) }}
+
+    env:
+      GH_REPO: ${{ github.repository }}
+      ENROLLED_REPO: ${{ matrix.batch.repo }}
+      TICKETS: ${{ toJSON(matrix.batch.tickets) }}
+      TRIGGER: ${{ github.event.label.name || format('agent:{0}', inputs.task) }}
+      # Dispatched: the task it names. Else `agent:explore` → explore,
+      # `agent:implement` → implement, `agent:review` → review.
+      TASK: >-
+        ${{ inputs.task
+        || github.event.label.name == 'agent:explore' && 'explore'
+        || github.event.label.name == 'agent:implement' && 'implement'
+        || 'review' }}
+      # Review only, and only when chained: the pull request to review.
+      PR: ${{ inputs.pr }}
+      # Decompose and build: the spec.
+      SPEC: ${{ inputs.spec }}
+      # How to retry if the run can't be started.
+      RETRY: >-
+        ${{ (inputs.task == 'decompose' || inputs.task == 'build')
+        && 'Take `agent:blocked` off to put it back in the queue.'
+        || format('Re-add `{0}` to retry.', github.event.label.name || format('agent:{0}', inputs.task)) }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Mint the Home repo's token
+        # This repo only, to claim the Tickets.
+        id: home
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          permission-issues: write
+
+      - name: Mint the Enrolled repo's token
+        # This batch's Enrolled repo only, to start its run, and nothing else.
+        id: enrolled
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.FACTORY_APP_ID }}
+          private-key: ${{ secrets.FACTORY_APP_PRIVATE_KEY }}
+          owner: ${{ matrix.batch.owner }}
+          repositories: ${{ matrix.batch.name }}
+          permission-actions: write
+
+      - name: Claim the Tickets
+        env:
+          GH_TOKEN: ${{ steps.home.outputs.token }}
+        run: |
+          set -euo pipefail
+          # A fresh clone of this repository does not have these labels yet.
+          gh label create "agent:in-progress" --color FBCA04 \
+            --description "An agent is working on this right now" || true
+          gh label create "agent:blocked" --color B60205 \
+            --description "An agent run failed here. Its comment says how to retry" || true
+          # The trigger comes off, so putting it back on is how you retry.
+          # `agent:in-progress` stays on until the run moves it on.
+          for n in $(jq -r '.[]' <<< "$TICKETS"); do
+            gh issue edit "$n" --remove-label "$TRIGGER" || true
+            gh issue edit "$n" --remove-label "agent:blocked" || true
+            gh issue edit "$n" --add-label "agent:in-progress"
+          done
+
+      - name: Start the run in the Enrolled repo
+        env:
+          GH_TOKEN: ${{ steps.enrolled.outputs.token }}
+        run: |
+          set -euo pipefail
+          # workflow_dispatch runs the caller from the repo's default branch.
+          ref="$(gh api "repos/$ENROLLED_REPO" --jq .default_branch)"
+          case "$TASK" in
+            explore) gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
+                       -f task=explore -f tickets="$TICKETS" ;;
+            # A batch of one: implement builds a Ticket at a time.
+            implement) gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
+                         -f task=implement -f ticket="$(jq -r '.[0]' <<< "$TICKETS")" ;;
+            # With no pull request named, review finds the Ticket's own.
+            review)
+              pr=()
+              if [ -n "$PR" ]; then
+                if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
+                  echo "::error::The pr input must be a number."
+                  exit 1
+                fi
+                pr=(-f pr="$PR")
+              fi
+              gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
+                -f task=review -f ticket="$(jq -r '.[0]' <<< "$TICKETS")" "${pr[@]}" ;;
+            # The spec queue: the spec, and for build the ticket too.
+            decompose | build)
+              if ! [[ "$SPEC" =~ ^[0-9]+$ ]]; then
+                echo "::error::The spec input must be a number."
+                exit 1
+              fi
+              ticket=()
+              if [ "$TASK" = "build" ]; then ticket=(-f ticket="$(jq -r '.[0]' <<< "$TICKETS")"); fi
+              gh workflow run factory.yml -R "$ENROLLED_REPO" --ref "$ref" \
+                -f task="$TASK" -f spec="$SPEC" "${ticket[@]}" ;;
+            *) echo "::error::Unknown task: $TASK"; exit 1 ;;
+          esac
+          echo "The $TASK run for $TICKETS started in $ENROLLED_REPO."
+
+      - name: Mark blocked on failure
+        # Claimed but never started: nothing else will move them on.
+        if: failure()
+        env:
+          GH_TOKEN: ${{ steps.home.outputs.token }}
+        run: |
+          for n in $(jq -r '.[]' <<< "$TICKETS"); do
+            gh issue edit "$n" --remove-label "agent:in-progress" || true
+            gh issue edit "$n" --add-label "agent:blocked" || true
+            gh issue comment "$n" --body \
+              "The ${TASK} run could not be started in \`${ENROLLED_REPO}\` — [logs](${RUN_URL}). ${RETRY} <!-- factory:status -->"
+          done

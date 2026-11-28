@@ -1,0 +1,14 @@
+# The Registry: every Enrolled repo, with the `repo:` label that routes
+# Tickets to it (ADR-0002, GLOSSARY.md). The Factory refuses a Ticket with no
+# `repo:` label, with more than one, or with one that isn't listed here.
+#
+# Each entry is a label and the repo it routes to, as `owner/name`. Enrolling
+# a repo starts here, and takes a reviewed change like any other.
+#
+# The routing rule and its tests: .sandcastle/agent-workflows/route/route.ts.
+
+repos:
+  # The Marketplace still lives in this repo, the Home repo. Its label points
+  # here until it moves out to a repo of its own.
+  - label: repo:marketplace
+    repo: trenddreamer/ship-it

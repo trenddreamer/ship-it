@@ -1,9 +1,8 @@
 import { z } from "zod";
+import { appInstallationToken, type FeedbackApp } from "./app-token";
 import type { Tracker } from "./tracker";
 
-export type GitHubTrackerOptions = {
-  /** A token with Issues: write on the repo. Not Actions' built-in `GITHUB_TOKEN`. */
-  token: string;
+export type GitHubTrackerOptions = FeedbackApp & {
   /** The repo to open issues in, as `owner/name`, e.g. `trenddreamer/ship-it`. */
   repo: string;
   /** The `fetch` to call GitHub with. Defaults to the global one; tests pass a stub. */
@@ -17,19 +16,22 @@ export type GitHubTrackerOptions = {
 const openedIssue = z.object({ html_url: z.string() });
 
 /**
- * A Tracker that opens a real GitHub issue through the REST API, with its
- * labels applied in the same call, and returns the issue's URL. It throws,
- * with GitHub's status and answer, when GitHub doesn't open it, and with
- * the cause when GitHub can't be reached.
+ * A Tracker that opens a real GitHub issue through the REST API as the
+ * Feedback App, with its labels applied in the same call, and returns the
+ * issue's URL. For each issue it first mints a short-lived installation
+ * token from the App's credentials. It throws, with GitHub's status and
+ * answer, when GitHub doesn't mint the token or open the issue, and with the
+ * cause when GitHub can't be reached.
  */
 export function githubTracker({
-  token,
   repo,
   fetch: callGitHub = fetch,
+  ...app
 }: GitHubTrackerOptions): Tracker {
   const url = `https://api.github.com/repos/${repo}/issues`;
   return {
     async openIssue({ title, body, labels }) {
+      const token = await appInstallationToken(app, callGitHub);
       const response = await callGitHub(url, {
         method: "POST",
         headers: {
