@@ -4,7 +4,7 @@ import { requireActingVendor } from "~/accounts.server";
 import { TextField } from "~/components/text-field";
 import { db } from "~/db/client.server";
 import { addProduct, newProductSchema } from "~/modules/catalogue";
-import { deliveryScheduleOptions } from "~/modules/deliveries";
+import { deliveryScheduleOptions } from "~/modules/deliveries/client";
 import { today } from "~/today.server";
 import type { Route } from "./+types/vendor-products-new";
 

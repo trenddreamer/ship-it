@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextThemeChoice, pageTheme } from "../index";
+import { nextThemeChoice, pageTheme } from "../client";
 
 describe("nextThemeChoice", () => {
   it("cycles Match my device, Light, Dark and round again", () => {

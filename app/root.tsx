@@ -8,7 +8,7 @@ import {
 } from "react-router";
 
 import { useThemeChoice } from "~/components/theme-toggle";
-import { pageTheme } from "~/modules/theme";
+import { pageTheme } from "~/modules/theme/client";
 import { themeChoiceFromRequest } from "~/modules/theme/server";
 import type { Route } from "./+types/root";
 import "./app.css";

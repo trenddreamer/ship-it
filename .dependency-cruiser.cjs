@@ -9,7 +9,8 @@
 // points (index.ts, client.ts, server.ts, …); prefer that over one giant
 // barrel index.
 //
-// The only thing you should ever need to edit here is PACKAGES_ROOT.
+// The generic rules need only PACKAGES_ROOT. One rule is this app's own:
+// components-import-client-entry-points names app/components/.
 
 /** Where packages live. One immediate child dir per package (flat, no nesting). */
 const PACKAGES_ROOT = "app/modules";
@@ -80,6 +81,18 @@ module.exports = {
       severity: "error",
       from: { path: "\\.test\\.[cm]?[jt]sx?$", pathNot: `^${R}/[^/]+/tests/` },
       to: {},
+    },
+    {
+      name: "components-import-client-entry-points",
+      comment:
+        "Components run in the browser, so they import a package's values only through its client.ts entry point. Other entry points may bring in the database or Node built-ins: b7e92f9 fixed a main where a component imported from ~/modules/accounts (index.ts), whose password hashing (node:crypto) broke the Vendor pages' hydration. Type-only imports are erased, so they may use any entry point.",
+      severity: "error",
+      from: { path: "^app/components/" },
+      to: {
+        path: `^${R}/[^/]+/[^/]+\\.[cm]?[jt]sx?$`, // a package's root code file: an entry point
+        pathNot: `^${R}/[^/]+/client\\.ts$`,
+        dependencyTypesNot: ["type-only"],
+      },
     },
 
     // --- Layering (optional, off by default) ----------------------------------

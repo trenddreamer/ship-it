@@ -3,7 +3,7 @@
 // moves on to the next: Match my device, Light, Dark, and round again.
 import { useFetcher, useRouteLoaderData } from "react-router";
 import { Icon } from "~/components/icon";
-import { nextThemeChoice, type ThemeChoice } from "~/modules/theme";
+import { nextThemeChoice, type ThemeChoice } from "~/modules/theme/client";
 
 // One fetcher, shared by key with useThemeChoice, so the page switches the
 // moment the icon is clicked rather than when the cookie comes back.

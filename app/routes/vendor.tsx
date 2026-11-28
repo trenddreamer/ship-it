@@ -10,12 +10,12 @@ import { formatCalendarDate } from "~/modules/calendar";
 import { listVendorProducts } from "~/modules/catalogue";
 import { listVendorCharges } from "~/modules/charges";
 import {
-  deliveryScheduleLabel,
   listVendorDueDeliveries,
   shipDelivery,
   shipDeliverySchema,
   type ShipRefusal,
 } from "~/modules/deliveries";
+import { deliveryScheduleLabel } from "~/modules/deliveries/client";
 import { listVendorSubscriptions } from "~/modules/subscriptions";
 import { findVendor, vendorMayAct } from "~/modules/vendors";
 import { today } from "~/today.server";

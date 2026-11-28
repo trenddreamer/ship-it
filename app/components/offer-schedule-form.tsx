@@ -1,6 +1,6 @@
 import { Form } from "react-router";
 import type { DeliverySchedule } from "~/db/schema";
-import { deliveryScheduleOptions } from "~/modules/deliveries";
+import { deliveryScheduleOptions } from "~/modules/deliveries/client";
 
 /**
  * A small form to offer one more Delivery Schedule for a Product, or offer
