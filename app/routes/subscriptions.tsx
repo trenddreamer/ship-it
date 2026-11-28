@@ -2,7 +2,8 @@ import { data, Form, Link, redirect } from "react-router";
 import { requireAccount } from "~/accounts.server";
 import { FormError } from "~/components/text-field";
 import { db } from "~/db/client.server";
-import { deliveryAddressLine, findDeliveryAddress } from "~/modules/accounts";
+import { findDeliveryAddress } from "~/modules/accounts";
+import { deliveryAddressLine } from "~/modules/accounts/client";
 import { formatCalendarDate } from "~/modules/calendar";
 import { deliveryScheduleLabel } from "~/modules/deliveries";
 import {

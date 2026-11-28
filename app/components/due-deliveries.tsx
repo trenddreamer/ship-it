@@ -1,6 +1,6 @@
 import { Form } from "react-router";
 import { FormError } from "~/components/text-field";
-import { deliveryAddressLine, type DeliveryAddress } from "~/modules/accounts";
+import { deliveryAddressLine, type DeliveryAddress } from "~/modules/accounts/client";
 
 interface ShownDelivery {
   id: number;
