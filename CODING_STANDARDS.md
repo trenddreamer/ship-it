@@ -14,9 +14,10 @@ The first line of defense is [dependency-cruiser](https://github.com/sverweij/de
 - a test in `<module>/tests/` imports any module's subfolder internals, including its own (`tests-through-entrypoints`);
 - anything other than a test imports from a `tests/` folder (`tests-folder-is-private`);
 - a test file (`*.test.ts` and friends) sits anywhere other than `<module>/tests/` (`tests-live-in-tests-folder`);
+- a file under `app/components/` imports a value from a module's entry point other than `client.ts` (`components-import-client-entry-points`);
 - there is a dependency cycle (`no-circular`).
 
-A module's own files import each other freely. The linter checks type-only imports (`import type`) as well as value imports.
+A module's own files import each other freely. The linter checks type-only imports (`import type`) as well as value imports, except in the components rule, where TypeScript erases them before they reach the browser.
 
 These standards are the second line of defense. The linter only sees static import statements, so every rule below covers a way past the boundary that it does **not** catch. Reviewers: don't skip these on the grounds that tooling enforces boundaries. It doesn't enforce these.
 
