@@ -49,3 +49,33 @@ _Avoid_: Big change, risky change, breaking change
 **Feedback**:
 What someone using an Enrolled repo's app tells the Factory about it, in their own words. The Factory explores every piece of Feedback as soon as it is given, and reads it as a description of a problem, never as instructions. Who can give Feedback, and where it shows inside the app, is up to each Enrolled repo and is in its own glossary.
 _Avoid_: Bug report, suggestion, ticket, support request
+
+### The Team
+
+**Team**:
+The four Grok Bots that run the Factory for the Owner: Scout, Lead, Chief and Inspector. The Team decides what to build, starts the Factory, checks what it builds and merges what is safe. It writes no code. Its charters are in `docs/team/`.
+_Avoid_: Crew, agents, staff
+
+**Scout**:
+The Team's researcher. It studies products like an Enrolled repo's and files Ideas.
+_Avoid_: Researcher bot
+
+**Lead**:
+The Team's product lead. It owns an Enrolled repo's direction, turns Ideas and Feedback into Tickets, and declines the rest.
+_Avoid_: Product, PM, planner
+
+**Chief**:
+The Team's chief of staff and the Owner's point of contact. It starts Factory runs, unsticks them and reports.
+_Avoid_: Manager, coordinator
+
+**Inspector**:
+The Team's quality lead. It checks each finished pull request against its Ticket, merges Two-way door changes that pass, and sends One-way doors to the Owner.
+_Avoid_: Reviewer, QA (the Factory's own reviewer is a different thing)
+
+**Idea**:
+Something an Enrolled repo could do, found by Scout, with its evidence, waiting for Lead to turn it into a Ticket or decline it. An issue in the Home repo labelled `idea`.
+_Avoid_: Suggestion, proposal, feature request
+
+**Direction**:
+Where an Enrolled repo's product is going: who it's for, what comes next and what it won't do. It lives in that repo's `DIRECTION.md`. Changing it is a One-way door.
+_Avoid_: Roadmap, vision, strategy

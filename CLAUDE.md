@@ -10,6 +10,10 @@ Follow [CODING_STANDARDS.md](./CODING_STANDARDS.md). Run `npm run check` before 
 - Each workflow's header says which tokens its jobs hold, and why. A job that runs an agent holds a write token only for what that job must write.
 - After changing a rule in `.sandcastle/agent-workflows/`, run `npm run test:mutation`. Target: 85–90%. See `docs/agents/mutation-testing.md`.
 
+## The Team
+
+Four Grok Bots run the Factory for the Owner, acting through the Owner's GitHub account. Their charters are in `docs/team/`: a change there changes how the Team works. Their issues and comments end with `— <Role> (Team)`.
+
 ## Enrolled repos
 
 Enrolling a repo, rotating the Factory's secrets, or an Enrolled repo's caller workflow or CI: follow [docs/enrolment/README.md](./docs/enrolment/README.md), which holds the steps, the lean-CI rules and `scripts/set-factory-secrets.sh`.
