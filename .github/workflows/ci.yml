@@ -1,15 +1,12 @@
 name: CI
 
-# The gate every change goes through: formatting, lint, typecheck, module
-# boundaries, tests, a fresh database, a production build and the journey
-# test (Playwright in Chromium, against that build).
+# The gate every change to the Home repo goes through: formatting, lint,
+# typecheck, and the tests of the Factory's scripts in .sandcastle/.
 #
 # WHY IT EXISTS
 #   The pre-commit hook is kept under 3 seconds, so it checks only staged
-#   files: their size, formatting and lint. Everything that grows with the codebase runs here instead, on
-#   every pull request, whoever opened it. The factory pushes with the
-#   Factory App's token, not GITHUB_TOKEN, so its pull requests and the
-#   reviewer's fix-up commits trigger this too.
+#   files: their size, formatting and lint. Everything that grows with the
+#   codebase runs here instead, on every pull request, whoever opened it.
 #
 # MAKE IT REQUIRED
 #   Settings → Branches → a rule for `main` → "Require status checks to
@@ -39,7 +36,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,48 +52,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Migrate and seed a fresh database
-        # Proves every migration applies from scratch and the seed runs,
-        # exactly as the agent workflows do before each run.
-        run: |
-          npm run db:migrate
-          npm run db:seed
-
-      - name: Formatting, lint, typecheck, module boundaries and tests
+      - name: Formatting, lint, typecheck and tests
         run: npm run check
-
-      - name: Build
-        run: npm run build
-
-      # The journey test (e2e/journey.test.ts): Chromium against the production
-      # build, over a fresh database of its own. Cache the browser per
-      # Playwright version; on a hit, only the system libraries are installed.
-      - name: Playwright version
-        id: playwright
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Playwright's browser
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-
-      - name: Install Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Install Chromium's system libraries
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
-
-      - name: Journey
-        run: npm run test:journey
-
-      - name: Upload the journey's traces
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: journey-test-results
-          path: test-results/
-          retention-days: 7

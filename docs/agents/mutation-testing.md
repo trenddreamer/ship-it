@@ -1,18 +1,16 @@
 # Mutation testing
 
-Stryker mutates the code in `app/modules/` (tests excluded), and, with its own config, the agent scripts' rules in `.sandcastle/agent-workflows/`, and reruns the Vitest suite against each mutant. A mutant the tests catch is **killed**. One they miss **survived**: behaviour no test pins down. Run it to check that a module's tests pin down its behaviour, not just cover its lines. It runs on demand only, outside the pre-commit hook, `npm run check` and CI. Config: `stryker.config.mjs`, and `stryker.scripts.config.mjs` for the scripts.
+Stryker mutates the Factory's rules in `.sandcastle/agent-workflows/` (routing, batching, the spec queue's survey, the pull request bodies, the verdict, the comment filter, publishing screenshots) and reruns their Vitest tests against each mutant. A mutant the tests catch is **killed**. One they miss **survived**: behaviour no test pins down. Run it to check that a rule's tests pin down its behaviour, not just cover its lines. It runs on demand only, outside the pre-commit hook, `npm run check` and CI. Config: `stryker.config.mjs`, whose `mutate` lists every rule that has tests.
 
 ## Run it
 
 1. Scope the run to the files you changed:
 
    ```sh
-   npm run test:mutation -- --mutate app/modules/<name>/lib/<file>.ts
+   npm run test:mutation -- --mutate .sandcastle/agent-workflows/<dir>/<file>.ts
    ```
 
-   For the whole of `app/modules/`, use `npm run test:mutation -- --incremental`. It reuses earlier results from `reports/mutation/` (gitignored) and reruns only the mutants a change could affect.
-
-   The agent scripts' rules in `.sandcastle/agent-workflows/` (routing, batching, the spec queue's survey, the pull request bodies, the verdict, the comment filter) have a config of their own, `stryker.scripts.config.mjs`, with the scripts' tsconfig and reports in `reports/mutation-scripts/`. `npm run test:mutation:scripts` mutates every file listed in its `mutate`, the ones with tests next to them; scope it the same way, `npm run test:mutation:scripts -- --mutate .sandcastle/agent-workflows/<dir>/<file>.ts`. When you give a script's rule tests, add its file to that list.
+   For every rule, use `npm run test:mutation -- --incremental`. It reuses earlier results from `reports/mutation/` (gitignored) and reruns only the mutants a change could affect. When you give a rule tests, add its file to `mutate`.
 
 2. Read the score table and the `[Survived]` diffs it prints. The target is a mutation score of **85–90%**. Below 85% the command exits 1.
 
@@ -22,7 +20,7 @@ Stryker mutates the code in `app/modules/` (tests excluded), and, with its own c
 
 ## Survivors
 
-- **A gap in the tests:** write a test, through the module's entry point, that fails on the mutant's behaviour. It should assert something a caller could see, the same as any other test (CODING_STANDARDS.md, "Tests live in `tests/` and go through the entry points").
+- **A gap in the tests:** write a test, through the rule's exports, that fails on the mutant's behaviour. It should assert something a caller could see, the same as any other test (CODING_STANDARDS.md, "A rule lives in its own file, with its tests next to it").
 - **Equivalent:** the mutant behaves the same as the original, so no test can kill it. Prefer simplifying the code so the redundant part is gone. When the code is right as it is, put a disable comment on the line above, naming the mutator and why it's equivalent:
 
   ```ts

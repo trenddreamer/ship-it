@@ -79,8 +79,7 @@ name: Agent — Route The Tickets
 #                Actions: read/write and nothing else, to dispatch the run.
 #                The second is minted per batch, after routing, because the
 #                repo it covers is the one the Registry named. Neither can
-#                start a run in the other's repo. While the Marketplace is
-#                still in ship-it, both cover ship-it.
+#                start a run in the other's repo.
 #   A run the App's token dispatches starts; GitHub only holds back runs the
 #   built-in GITHUB_TOKEN would start.
 #

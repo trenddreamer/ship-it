@@ -71,30 +71,16 @@ don't bypass this hook.
 
 How to split, by kind of file:
 
-  Entry point of a module (a file at the root of app/modules/<module>/)
-    It is doing work that belongs in lib/. Move the implementation into
-    lib/ and keep the entry point to the exports callers need. If it
-    serves different kinds of caller, split it into several small entry
-    points (index.ts, client.ts, server.ts). Never re-export lib/
-    wholesale (export * from "./lib/...").
+  An agent script in .sandcastle/agent-workflows/
+    Find the separate responsibilities: a pure rule, the I/O around it, the
+    prompt or schema it uses. Give each its own file beside the others
+    (route.ts, route-tickets.ts, ...), with a rule's tests next to it in
+    <name>.test.ts (CODING_STANDARDS.md, "A rule lives in its own file,
+    with its tests next to it").
 
-  Implementation in app/modules/<module>/lib/
-    Find the separate responsibilities: groups of functions and types that
-    use each other but little of the rest. Move each group into its own
-    file in lib/ (lib/parse.ts, lib/validate.ts, ...). If the groups are
-    different concepts rather than parts of one, the module is really two:
-    make a new module under app/modules/ with its own entry points, as
-    app/modules/README.md describes.
-
-  Tests in app/modules/<module>/tests/
-    One test file per behaviour of the interface (tests/create.test.ts,
-    tests/cancel.test.ts, ...). Move shared setup and builders into a
-    fixture file in tests/. Tests still import only entry points.
-
-  Other code
-    Behaviour outside app/modules/ belongs in a module (see
-    CODING_STANDARDS.md, "Behaviour goes in a module, not a route"). Move
-    it there, then split as above.
+  Tests
+    One test file per behaviour, beside the file it tests. Move shared
+    setup and builders into a fixture file next to them.
 
   Markdown and docs
     Split by top-level heading into separate files and link them from a
@@ -105,7 +91,7 @@ How to split, by kind of file:
     scenario), or move large data out of the config into its own file.
 
 Then stage the new files (git add), run npm run check to confirm the
-boundaries and tests still pass, and commit again.
+checks and tests still pass, and commit again.
 GUIDANCE
 } >&2
 exit 1

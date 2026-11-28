@@ -1,6 +1,6 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
+Every Ticket, for every Enrolled repo, lives here as a GitHub issue, and so do specs. Use the `gh` CLI for all operations. A Ticket carries exactly one `repo:` label, from the Registry (`repos.yml`), naming the Enrolled repo it is for; the Factory refuses one with none, or with more than one.
 
 ## Conventions
 

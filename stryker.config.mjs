@@ -1,39 +1,38 @@
-// Mutation testing with Stryker: `npm run test:mutation`.
-//
-// Stryker makes small changes (mutants) to the code under test and reruns
-// the tests against each one. A mutant the tests catch is killed. One they
-// miss survived, and points at behaviour no test pins down. The mutation
-// score is the share killed.
-//
-// This is a verification tool for agents and people to run on demand. It is
-// not part of the pre-commit hook, `npm run check` or CI. See
-// docs/agents/mutation-testing.md for how and when to use it.
+// Mutation testing for the Factory's scripts: `npm run test:mutation`. It
+// mutates the pure rules in .sandcastle/agent-workflows/ that the Factory's
+// workflows run, and reruns their Vitest tests against each mutant. See
+// docs/agents/mutation-testing.md.
 
 /** @type {import('@stryker-mutator/api/core').PartialStrykerOptions} */
 export default {
   testRunner: "vitest",
   vitest: { configFile: "vitest.config.ts" },
   checkers: ["typescript"],
-  tsconfigFile: "tsconfig.json",
-  // Behaviour lives in modules, so that is what gets mutated. Routes,
-  // components and the db scripts hold no business logic, and no test
-  // exercises them.
-  mutate: ["app/modules/**/*.{ts,tsx}", "!app/modules/*/tests/**"],
-  // The target is a score between 85% and 90%. Below 85% the run fails.
+  // The scripts' own tsconfig: they import each other with `.ts` on the path.
+  tsconfigFile: ".sandcastle/agent-workflows/tsconfig.json",
+  // The files with tests next to them. Add one here when you give it tests.
+  // The CLIs around them (route-tickets.ts, finish-pr-body.ts, ...) only do
+  // I/O, and the Sandcastle scripts run an agent; no test exercises either.
+  mutate: [
+    ".sandcastle/agent-workflows/route/route.ts",
+    ".sandcastle/agent-workflows/shared/evidence.ts",
+    ".sandcastle/agent-workflows/route/batch.ts",
+    ".sandcastle/agent-workflows/implement-spec/survey.ts",
+    ".sandcastle/agent-workflows/implement/pr-body.ts",
+    ".sandcastle/agent-workflows/review/verdict.ts",
+    ".sandcastle/agent-workflows/review/pull-request.ts",
+    ".sandcastle/agent-workflows/review/fallback-body.ts",
+    ".sandcastle/agent-workflows/review/left-findings.ts",
+    ".sandcastle/agent-workflows/shared/steering-comments.ts",
+  ],
   thresholds: { high: 90, low: 85, break: 85 },
   reporters: ["clear-text", "progress", "html", "json"],
-  // Survivors are listed either way. The per-test list is noise.
   clearTextReporter: { reportTests: false },
   htmlReporter: { fileName: "reports/mutation/mutation.html" },
   jsonReporter: { fileName: "reports/mutation/mutation.json" },
-  // Reruns only the mutants a change could affect. Pass `--incremental`.
   incrementalFile: "reports/mutation/stryker-incremental.json",
-  // More workers than this starve each other, and mutants time out instead
-  // of being killed, which inflates the score.
   concurrency: 4,
   tempDirName: ".stryker-tmp",
-  // Stryker copies the project into each sandbox and doesn't read .gitignore,
-  // so skip agents' git worktrees, each a whole checkout with node_modules.
   ignorePatterns: ["/.claude/worktrees"],
   cleanTempDir: true,
 };

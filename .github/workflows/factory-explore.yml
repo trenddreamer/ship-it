@@ -6,7 +6,7 @@ name: Factory — Explore The Tickets
 #
 # WHAT STARTS IT
 #   Nothing starts it on its own. An Enrolled repo's caller workflow calls it
-#   (for the Marketplace, still in ship-it: .github/workflows/factory.yml),
+#   (its .github/workflows/factory.yml, from docs/enrolment/factory.yml),
 #   and the Home repo's routing job, .github/workflows/agent-route.yml,
 #   dispatches that caller with `task=explore` and a batch of Tickets.
 #

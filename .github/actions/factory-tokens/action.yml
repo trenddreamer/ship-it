@@ -29,10 +29,9 @@ description: >-
 #                Pull requests, to push and open or review the pull request.
 #                Never Actions. Minted only if the job asks for one of them.
 #
-#   While the Marketplace is still in ship-it, the Home repo is its Enrolled
-#   repo, so both tokens cover ship-it and the enrolled token can still push
-#   there. Once it moves out, the enrolled token covers the Marketplace's
-#   repo alone, and nothing in an Enrolled run can write the Home repo's code.
+#   The Home repo is never an Enrolled repo itself, so the enrolled token
+#   never covers it, and nothing in an Enrolled run can write the Home repo's
+#   code. Keep it that way: enrolling the Home repo would undo that.
 #
 #   Each job passes the permissions it needs, as `read` or `write`; an input
 #   left empty gives none. A token minted with no `permission-*` at all would
