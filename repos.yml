@@ -10,4 +10,4 @@
 repos:
   # The Marketplace, in a repo of its own since #53.
   - label: repo:marketplace
-    repo: trenddreamer/subscription-marketplace
+    repo: trenddreamer/ship-it-marketplace
