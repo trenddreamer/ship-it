@@ -8,7 +8,6 @@
 # The routing rule and its tests: .sandcastle/agent-workflows/route/route.ts.
 
 repos:
-  # The Marketplace still lives in this repo, the Home repo. Its label points
-  # here until it moves out to a repo of its own.
+  # The Marketplace, in a repo of its own since #53.
   - label: repo:marketplace
-    repo: trenddreamer/ship-it
+    repo: trenddreamer/subscription-marketplace

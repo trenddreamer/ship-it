@@ -104,7 +104,7 @@ Skip this step if the app has no feedback button. If it has one, it files Feedba
 | Setting                        | Value                                                                                                                                                 |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `FEEDBACK_APP_ID`              | The Feedback App's ID, from its settings page.                                                                                                        |
-| `FEEDBACK_APP_PRIVATE_KEY`     | A private key for the Feedback App, as PEM on one line, with `\n` for each line break.                                                                |
+| `FEEDBACK_APP_PRIVATE_KEY`     | A private key for the Feedback App, as PEM: with its real line breaks, or on one line with `\n` for each.                                             |
 | `FEEDBACK_APP_INSTALLATION_ID` | The ID of the Feedback App's installation on the Home repo: the number at the end of its **Configure** page's URL, `.../settings/installations/<id>`. |
 | `FEEDBACK_GITHUB_REPO`         | `trenddreamer/ship-it`, the Home repo. That is the default.                                                                                           |
 | `FEEDBACK_REPO_LABEL`          | `repo:<name>`, the label from step 1.                                                                                                                 |
