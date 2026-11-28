@@ -5,7 +5,8 @@ Review it with the `code-review` skill:
 
 - fixed point: `origin/{{BASE_REF}}`
 - spec: /tmp/review-spec.md
-- standards: CODING_STANDARDS.md, if this repository has one
+- standards: CODING_STANDARDS.md, if this repository has one, and, for a
+  change that shows in the UI, DESIGN.md, if it has one
 
 A split that the repository's own file-size limit forced (a pre-commit hook,
 say) is in scope for any ticket: tell both axes so. Check moved code with

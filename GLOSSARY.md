@@ -53,7 +53,7 @@ _Avoid_: Bug report, suggestion, ticket, support request
 ### The Team
 
 **Team**:
-The four Grok Bots that run the Factory for the Owner: Scout, Lead, Chief and Inspector. The Team decides what to build, starts the Factory, checks what it builds and merges what is safe. It writes no code. Its charters are in `docs/team/`.
+A group of Grok Bots that runs the Factory for the Owner on one Enrolled repo, and is named for it. The Marketplace Team is Scout, Lead, Designer, Chief and Inspector. A Team decides what to build, starts the Factory, checks what it builds and merges what is safe. It writes no code. Its charters are in `docs/team/`.
 _Avoid_: Crew, agents, staff
 
 **Scout**:
@@ -64,6 +64,10 @@ _Avoid_: Researcher bot
 The Team's product lead. It owns an Enrolled repo's direction, turns Ideas and Feedback into Tickets, and declines the rest.
 _Avoid_: Product, PM, planner
 
+**Designer**:
+The Team's product designer. It owns how an Enrolled repo's product looks and reads, writes it down in that repo's `DESIGN.md`, and files design Tickets that keep improving it.
+_Avoid_: UI bot, stylist
+
 **Chief**:
 The Team's chief of staff and the Owner's point of contact. It starts Factory runs, unsticks them and reports.
 _Avoid_: Manager, coordinator
@@ -71,6 +75,10 @@ _Avoid_: Manager, coordinator
 **Inspector**:
 The Team's quality lead. It checks each finished pull request against its Ticket, merges Two-way door changes that pass, and sends One-way doors to the Owner.
 _Avoid_: Reviewer, QA (the Factory's own reviewer is a different thing)
+
+**Sister product**:
+Another of the Owner's products that a Team learns from but never changes. Midlands What's On is the Marketplace's. What's live on a sister product counts as approved by the Owner.
+_Avoid_: Partner app, related project
 
 **Idea**:
 Something an Enrolled repo could do, found by Scout, with its evidence, waiting for Lead to turn it into a Ticket or decline it. An issue in the Home repo labelled `idea`.
