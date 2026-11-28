@@ -160,11 +160,12 @@ jobs:
     permissions:
       contents: read # the Enrolled checkout. The Tickets are read with the App's token.
 
-    # The batch it was given, and the plan it came back with. The apply job
-    # reads both.
+    # The batch it was given. The apply job reads it, and the plan, which
+    # travels as an artifact: GitHub drops a job output that contains
+    # anything it masks, and a plan can quote, say, an `Authorization:`
+    # header from the code it read.
     outputs:
       batch: ${{ steps.batch.outputs.numbers }}
-      plan: ${{ steps.plan.outputs.json }}
 
     steps:
       - name: Mint the Factory App's token
@@ -280,11 +281,12 @@ jobs:
             "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/explore/explore.ts"
 
       - name: Hand the plan to the apply job
-        id: plan
         if: steps.batch.outputs.numbers != '[]'
-        run: |
-          set -euo pipefail
-          echo "json=$(jq -c . "$RUNNER_TEMP/plan.json")" >> "$GITHUB_OUTPUT"
+        uses: actions/upload-artifact@v4
+        with:
+          name: explore-plan
+          path: ${{ runner.temp }}/plan.json
+          if-no-files-found: ignore
 
       - name: Hand the screenshots to the apply job
         if: steps.batch.outputs.numbers != '[]'
@@ -353,18 +355,26 @@ jobs:
         with:
           token: ${{ steps.factory.outputs.enrolled-token }}
 
+      - name: Take the plan from the explore job
+        if: needs.explore.result == 'success'
+        # A pattern, not a name, so an empty batch (no plan) carries on, and
+        # the next step says what's missing.
+        uses: actions/download-artifact@v4
+        with:
+          pattern: explore-plan
+          path: /tmp/explore-plan
+          merge-multiple: true
+
       - name: Check the plan
         if: needs.explore.result == 'success'
-        env:
-          # Through env, never pasted into the script. A `${{ }}` inside
-          # `run:` is text bash runs, and the plan was written by an agent
-          # that has just read a pile of untrusted issues.
-          PLAN: ${{ needs.explore.outputs.plan }}
+        # The plan is a file, read with jq, never pasted into the script: it
+        # was written by an agent that has just read a pile of untrusted
+        # issues.
         run: |
           set -euo pipefail
           # Every Ticket in the batch was closed since it was claimed.
           [ "$BATCH" = "[]" ] && exit 0
-          printf '%s' "$PLAN" > /tmp/plan.json
+          cp /tmp/explore-plan/plan.json /tmp/plan.json 2>/dev/null || true
           [ -s /tmp/plan.json ] || { echo "The explore run returned no plan." >&2; exit 1; }
 
           # Every rule, written as "what is wrong". An empty list means apply.
