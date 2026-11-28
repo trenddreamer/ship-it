@@ -9,7 +9,8 @@
 // points (index.ts, client.ts, server.ts, …); prefer that over one giant
 // barrel index.
 //
-// The only thing you should ever need to edit here is PACKAGES_ROOT.
+// The generic rules need only PACKAGES_ROOT. One rule is this app's own:
+// components-import-client-entry-points names app/components/.
 
 /** Where packages live. One immediate child dir per package (flat, no nesting). */
 const PACKAGES_ROOT = "app/modules";
