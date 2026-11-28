@@ -433,7 +433,8 @@ jobs:
             echo "This run saw the diff, the standards and the Ticket, and nothing else."
           } >> /tmp/review-verdict.md
           # Points each /tmp/evidence path at the screenshot published above.
-          [ -z "${EVIDENCE_CLI:-}" ] || node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/review-verdict.md
+          [ -z "${EVIDENCE_CLI:-}" ] || node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/review-verdict.md ||
+            echo "::warning::The screenshots could not be embedded. Posting without them."
           # gh prints the new comment's URL: the Ticket links to it.
           url="$(gh pr comment "$PR_NUMBER" -R "$ENROLLED_REPO" \
             --body-file /tmp/review-verdict.md)"

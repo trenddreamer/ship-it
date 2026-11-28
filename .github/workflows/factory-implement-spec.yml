@@ -329,7 +329,8 @@ jobs:
             } > /tmp/ticket-body.md
 
             [ -z "${EVIDENCE_CLI:-}" ] ||
-              node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/ticket-body.md "${position}-"
+              node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/ticket-body.md "${position}-" ||
+              echo "::warning::The screenshots could not be embedded. Posting without them."
 
             gh issue create -R "$HOME_REPO" \
               --title "$title" \
@@ -578,7 +579,8 @@ jobs:
           base="$(gh repo view "$ENROLLED_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
 
           # Each /tmp/evidence path points at the screenshot published above.
-          [ -z "${EVIDENCE_CLI:-}" ] || node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/pr-body-final.md
+          [ -z "${EVIDENCE_CLI:-}" ] || node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/pr-body-final.md ||
+            echo "::warning::The screenshots could not be embedded. Posting without them."
 
           url="$(gh pr create \
             -R "$ENROLLED_REPO" \

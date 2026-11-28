@@ -443,7 +443,8 @@ jobs:
             # above. The comment points at them, and gets any it didn't
             # reference.
             [ -z "${EVIDENCE_CLI:-}" ] ||
-              node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/comment.md "${n}-"
+              node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/comment.md "${n}-" ||
+              echo "::warning::The screenshots could not be embedded. Posting without them."
             gh issue comment "$n" --body-file /tmp/comment.md
 
             # The branch. Every path takes `agent:in-progress` off: this

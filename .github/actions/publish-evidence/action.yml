@@ -15,7 +15,9 @@ description: >-
 #   through the Git database API: nothing is cloned or force-pushed. The branch
 #   is never merged. GitHub shows its `raw/` URLs inline to anyone signed in
 #   who can read the repo. A failure to publish is a warning: the body still
-#   goes out, and says which screenshots are missing.
+#   goes out, and says which screenshots are missing. Each step that embeds
+#   them warns rather than fails if embedding does, so a body is never lost
+#   to its screenshots.
 #
 # THEN, IN A LATER STEP
 #     node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" body.md [<prefix>]
@@ -51,8 +53,11 @@ runs:
         set -euo pipefail
         cli="$(realpath "$CLI")"
         map="$RUNNER_TEMP/evidence-map.json"
-        node "$cli" publish "$GITHUB_REPOSITORY" "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" "$map"
+        # Before publishing, so a later step can still embed: a screenshot
+        # that didn't publish becomes a note, never a broken /tmp path.
+        echo '{"files":[],"urls":{}}' > "$map"
         {
           echo "EVIDENCE_CLI=$cli"
           echo "EVIDENCE_MAP=$map"
         } >> "$GITHUB_ENV"
+        node "$cli" publish "$GITHUB_REPOSITORY" "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" "$map"
