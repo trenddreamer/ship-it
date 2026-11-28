@@ -4,7 +4,6 @@
 export type { Account, AccountOf } from "./lib/account";
 export { findAccount } from "./lib/account";
 export {
-  deliveryAddressLine,
   deliveryAddressSchema,
   findDeliveryAddress,
   setDeliveryAddress,

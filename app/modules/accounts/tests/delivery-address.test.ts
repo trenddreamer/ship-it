@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { deliveryAddressLine } from "../client";
 import {
-  deliveryAddressLine,
   deliveryAddressSchema,
   findDeliveryAddress,
   setDeliveryAddress,
