@@ -1,11 +1,10 @@
 import { cruise } from "dependency-cruiser";
-import extractTSConfig from "dependency-cruiser/config-utl/extract-ts-config";
 
 /** A database driver: a package that opens SQLite files, which the browser can't do. */
-const DATABASE_DRIVER = /^node_modules\/(@libsql\/|drizzle-orm\/libsql\/)/;
+const DATABASE_DRIVER = /node_modules\/(@libsql\/|drizzle-orm\/libsql\/)/;
 
 /** Server-only app code, by the `.server.ts` naming React Router keeps out of the browser. */
-const SERVER_ONLY_FILE = /\.server\.[cm]?[jt]sx?$/;
+const SERVER_ONLY_FILE = /\.server\./;
 
 /**
  * Everything `entry` loads at run time, however indirectly, that would break
@@ -19,16 +18,11 @@ const SERVER_ONLY_FILE = /\.server\.[cm]?[jt]sx?$/;
  * rather than passing every `client.ts`.
  */
 export async function browserUnsafeDependencies(entry: string): Promise<string[]> {
-  const result = await cruise(
-    [entry],
-    {
-      tsPreCompilationDeps: false,
-      doNotFollow: { path: "node_modules" },
-      tsConfig: { fileName: "tsconfig.json" },
-    },
-    { extensions: [".ts", ".tsx", ".js"] },
-    { tsConfig: extractTSConfig("tsconfig.json") },
-  );
+  const result = await cruise([entry], {
+    tsPreCompilationDeps: false,
+    doNotFollow: { path: "node_modules" },
+    tsConfig: { fileName: "tsconfig.json" },
+  });
   if (typeof result.output === "string") throw new Error("expected cruise results");
   return result.output.modules
     .filter(

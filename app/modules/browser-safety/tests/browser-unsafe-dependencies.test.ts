@@ -12,10 +12,14 @@ describe("browserUnsafeDependencies", () => {
     expect(await browserUnsafeDependencies(fixture("node-built-in"))).toEqual(["crypto"]);
   });
 
+  it("follows `~/` imports to what they load", async () => {
+    expect(await browserUnsafeDependencies(fixture("aliased"))).toEqual(["crypto"]);
+  });
+
   it("reports the database driver", async () => {
     const unsafe = await browserUnsafeDependencies(fixture("database-driver"));
     expect(unsafe).toHaveLength(1);
-    expect(unsafe[0]).toMatch(/^node_modules\/@libsql\/client\//);
+    expect(unsafe[0]).toMatch(/node_modules\/@libsql\/client\//);
   });
 
   it("reports a .server.ts file", async () => {
