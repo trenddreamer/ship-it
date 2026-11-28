@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deliveryAddressLine,
   deliveryAddressSchema,
   findDeliveryAddress,
   setDeliveryAddress,
@@ -102,5 +103,11 @@ describe("deliveryAddressSchema", () => {
     expect(deliveryAddressSchema.safeParse({ ...home, street: "x".repeat(120) }).success).toBe(
       true,
     );
+  });
+});
+
+describe("a Delivery Address on one line", () => {
+  it("names the street, suburb, city and postal code, in that order", () => {
+    expect(deliveryAddressLine(home)).toBe("12 Long Street, Gardens, Cape Town, 8001");
   });
 });

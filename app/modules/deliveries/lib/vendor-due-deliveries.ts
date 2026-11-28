@@ -1,6 +1,7 @@
 import { asc, eq, and, isNull } from "drizzle-orm";
 import { accounts, deliveries, deliveryAddresses, products, subscriptions } from "~/db/schema";
 import type { CalendarDate } from "~/modules/calendar";
+import type { DeliveryAddress } from "~/modules/accounts";
 import { formatPrice } from "~/modules/price";
 import type { MarketplaceDatabase } from "~/db/database";
 
@@ -11,7 +12,7 @@ export interface DueDelivery {
   productName: string;
   customerEmail: string;
   /** Where to send it: the Customer's Delivery Address as it is now. */
-  deliveryAddress: { street: string; suburb: string; city: string; postalCode: string };
+  deliveryAddress: DeliveryAddress;
   /** The Price it records, in whole cents. */
   priceCents: number;
   /** The Price formatted for display, e.g. "R 150,00". */
