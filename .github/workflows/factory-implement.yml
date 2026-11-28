@@ -355,16 +355,22 @@ jobs:
           node "$RUNNER_TEMP/factory/.sandcastle/agent-workflows/implement/finish-pr-body.ts" \
             "$HOME_REPO" "$TICKET" "$RUN_URL" < /tmp/pr-body.md > /tmp/pr-body-final.md
 
+      - name: Publish the screenshots
+        # To the evidence branch, with the enrolled token, which pushed the
+        # branch above. See .github/actions/publish-evidence.
+        continue-on-error: true
+        uses: trenddreamer/ship-it/.github/actions/publish-evidence@main
+        with:
+          token: ${{ steps.factory.outputs.enrolled-token }}
+
       - name: Open the draft pull request
         id: pr
         env:
           # By default the built-in GITHUB_TOKEN is not allowed to open a
           # pull request, so this is the App's. This step runs nothing the
           # agent wrote: it reads the agent's summary as text and hands it to
-          # `gh`. `--attach` uploads the agent's screenshots and swaps each
-          # matching /tmp/evidence path in the body for its URL. GITHUB_TOKEN
-          # is rejected for that upload. Whether an App's token is accepted
-          # is still to be seen on a live run.
+          # `gh`, with each /tmp/evidence path pointed at the screenshot
+          # published above.
           GH_TOKEN: ${{ steps.factory.outputs.enrolled-token }}
           # The Ticket's title is in the Home repo, read with its own token.
           HOME_TOKEN: ${{ steps.factory.outputs.home-token }}
@@ -374,10 +380,7 @@ jobs:
           # Into the default branch: GitHub ignores `Closes` anywhere else.
           base="$(gh repo view "$ENROLLED_REPO" --json defaultBranchRef --jq .defaultBranchRef.name)"
 
-          # nullglob: no screenshots means no --attach, and the PR still opens.
-          shopt -s nullglob
-          attach=()
-          for png in /tmp/evidence/*.png; do attach+=(--attach "$png"); done
+          [ -z "${EVIDENCE_CLI:-}" ] || node "$EVIDENCE_CLI" embed "$EVIDENCE_MAP" /tmp/pr-body-final.md
 
           url="$(gh pr create \
             -R "$ENROLLED_REPO" \
@@ -385,8 +388,7 @@ jobs:
             --base "$base" \
             --head "$BRANCH" \
             --title "$title" \
-            --body-file /tmp/pr-body-final.md \
-            "${attach[@]}")"
+            --body-file /tmp/pr-body-final.md)"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Hand the pull request to the reviewer

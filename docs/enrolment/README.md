@@ -95,6 +95,15 @@ Every Ticket lives in the Home repo, so it shouldn't send agents to the repo's o
 
 **What it does:** every private repo on the account shares the same 2,000 free Actions minutes a month, and so does the Factory. One repo's wasteful CI can stop the Factory everywhere until the month resets. Keep the repo's CI to [the lean-CI rules](#the-lean-ci-rules) before the Factory starts opening pull requests there, because every Factory pull request runs the repo's CI too.
 
+Keep the `factory-evidence` branch out of CI and deploys too. The Factory commits its agents' screenshots there, so they can show inline on Tickets and pull requests ([ADR-0004](../adr/0004-factory-and-feedback-act-as-github-apps.md#screenshots)), and every one of those commits is a push:
+
+- No workflow may run on a push to every branch. CI on `pull_request` alone, as the lean-CI rules ask, is already fine.
+- A host that deploys every branch must skip it. For Vercel, in the repo's `vercel.json`:
+
+  ```json
+  "git": { "deploymentEnabled": { "factory-evidence": false } }
+  ```
+
 ### 6. Point any feedback button at the Home repo, with the repo's `repo:` label
 
 **What it does:** Feedback from someone using the app becomes a Ticket in the Home repo, already carrying the repo's `repo:` label and `agent:explore`, so it routes and gets explored like any other Ticket. It is filed by the Feedback App, which can only open issues in the Home repo, so a compromised app server can't touch any code.
@@ -136,6 +145,16 @@ Every Enrolled repo's own CI keeps to these:
 3. **No one-minute jobs for trivial checks.** GitHub bills every job by the minute, rounded up, so a five-second lint job costs a whole minute. Run the checks as steps in one job, not one job each.
 
 The Home repo's own CI, `.github/workflows/ci.yml`, keeps to all three.
+
+## Pruning the screenshots
+
+Each Enrolled repo's `factory-evidence` branch only grows, one folder per run that took screenshots, and a full clone of the repo fetches it. When it gets too big, delete it:
+
+```sh
+gh api -X DELETE repos/owner/name/git/refs/heads/factory-evidence
+```
+
+The next run with screenshots starts it again. Every comment and pull request that showed an image from it then shows a broken image instead.
 
 ## Rotating the secrets
 

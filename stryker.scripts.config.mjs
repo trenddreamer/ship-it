@@ -16,6 +16,7 @@ export default {
   // I/O, and the Sandcastle scripts run an agent; no test exercises either.
   mutate: [
     ".sandcastle/agent-workflows/route/route.ts",
+    ".sandcastle/agent-workflows/shared/evidence.ts",
     ".sandcastle/agent-workflows/route/batch.ts",
     ".sandcastle/agent-workflows/implement-spec/survey.ts",
     ".sandcastle/agent-workflows/implement/pr-body.ts",
