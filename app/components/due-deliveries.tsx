@@ -1,5 +1,6 @@
 import { Form } from "react-router";
 import { FormError } from "~/components/text-field";
+import { deliveryAddressLine, type DeliveryAddress } from "~/modules/accounts";
 
 interface ShownDelivery {
   id: number;
@@ -7,7 +8,7 @@ interface ShownDelivery {
   dueOn: string;
   productName: string;
   customerEmail: string;
-  deliveryAddress: { street: string; suburb: string; city: string; postalCode: string };
+  deliveryAddress: DeliveryAddress;
   /** The recorded Price, formatted. */
   price: string;
 }
@@ -37,14 +38,13 @@ export function DueDeliveries({
       ) : (
         <ul className="mt-4 divide-y divide-line">
           {deliveries.map((delivery) => {
-            const { street, suburb, city, postalCode } = delivery.deliveryAddress;
             return (
               <li key={delivery.id} className="flex justify-between gap-6 py-3">
                 <div>
                   <h3 className="font-medium">{delivery.productName}</h3>
                   <p className="text-sm">Due {delivery.dueOn}</p>
                   <p className="text-sm text-muted">
-                    To {delivery.customerEmail}, {street}, {suburb}, {city}, {postalCode}
+                    To {delivery.customerEmail}, {deliveryAddressLine(delivery.deliveryAddress)}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
